@@ -69,6 +69,7 @@ export async function tenant(slug: string) {
 export function publicProfile(p: any) {
   const fields = [
     'id',
+    'branding_client_name',
     'display_name',
     'address',
     'phone',

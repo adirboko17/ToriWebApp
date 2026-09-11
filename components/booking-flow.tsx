@@ -20,6 +20,8 @@ import {
 import { api, dateLabel, downloadCalendar } from '@/lib/client';
 import { israelNow, addDays } from '@/lib/availability';
 import AuthForm from './auth-form';
+import BrandImage from './brand-image';
+import { businessLogos } from '@/lib/branding';
 import BookingCalendar from './booking-calendar';
 import { useRouter } from 'next/navigation';
 export default function BookingFlow({
@@ -266,14 +268,11 @@ export default function BookingFlow({
             onClick={() => setStep(0)}
             className="booking-chip staff-chip"
           >
-            {staff.find((s: any) => s.id === worker)?.image_url ? (
-              <img
-                src={staff.find((s: any) => s.id === worker).image_url}
-                alt=""
-              />
-            ) : (
-              <UserRound size={26} />
-            )}
+            <BrandImage
+              sources={[staff.find((s: any) => s.id === worker)?.image_url, ...businessLogos(profile, slug)]}
+              alt={staffName}
+              fallback={<UserRound size={26} />}
+            />
             <span>{staffName}</span>
           </button>
           {picked.length > 0 && step > 1 && (
@@ -350,13 +349,11 @@ export default function BookingFlow({
                 setStep(1);
               }}
             >
-              {s.image_url ? (
-                <img src={s.image_url} alt={s.name} />
-              ) : (
-                <div className="staff-fallback">
-                  <UserRound size={45} />
-                </div>
-              )}
+              <BrandImage
+                sources={[s.image_url, ...businessLogos(profile, slug)]}
+                alt={s.name}
+                fallback={<div className="staff-fallback"><UserRound size={45} /></div>}
+              />
               <strong>{s.name}</strong>
               <span>
                 לבחירה <ChevronLeft size={15} />

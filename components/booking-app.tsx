@@ -22,6 +22,8 @@ import Link from 'next/link';
 import ClientPages from './client-pages';
 import AdminPanel from './admin-panel';
 import AuthForm from './auth-form';
+import BrandImage from './brand-image';
+import { businessLogos } from '@/lib/branding';
 export default function BookingApp({
   slug,
   screen,
@@ -127,8 +129,8 @@ export default function BookingApp({
       <main className="app-panel">
         <header>
           <a className="wordmark" href={`/${slug}`}>
-            {p?.home_header_show_logo !== false && p?.home_logo_url ? (
-              <img src={p.home_logo_url} alt={p.display_name || 'לוגו העסק'} />
+            {p?.home_header_show_logo !== false && businessLogos(p, slug).length ? (
+              <BrandImage sources={businessLogos(p, slug)} alt={p?.display_name || 'לוגו העסק'} fallback={<span>{p?.display_name || 'Tori'}</span>} />
             ) : p?.home_header_show_logo === false ? (
               <span className="business-title">
                 {p.home_header_text_without_logo || p.display_name}
