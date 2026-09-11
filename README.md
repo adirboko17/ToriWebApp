@@ -1,10 +1,14 @@
 # Tori Web
 
-Separate RTL, mobile-first booking website for the existing Barber English Supabase project. Built with React, TypeScript and Vinext (Next.js App Router APIs) for the Sites Cloudflare runtime.
+Separate RTL, mobile-first booking website for the existing Barber English Supabase project. Built with React, TypeScript and Next.js App Router for Vercel.
 
 ## Run
 
-`npm install` then `npm run dev`. Configure `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and a random 32+ character `SESSION_SECRET` in ignored `.dev.vars`. Production values are stored in Sites runtime secrets. No service-role key is used or shipped.
+`npm install` then `npm run dev`. Configure `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and a random 32+ character `SESSION_SECRET` in ignored `.env.local` (see `.env.example`). No service-role key is used or shipped.
+
+## Vercel
+
+Connect the repository's `main` branch, with the project root at the repository root. `vercel.json` selects Next.js, `npm ci`, `npm run build` and `.next` output. Add all three variables from `.env.example` in Vercel Settings → Environment Variables for Production and Preview, then redeploy. Secrets previously configured in Sites do not transfer to Vercel. Keep them server-only, without a `NEXT_PUBLIC_` prefix. Validate `/amitsenior`, `/amitsenior/book` and `/api/b/amitsenior/bootstrap` after deployment. A platform `404 NOT_FOUND` indicates deployment/routing configuration; a server error about the business connection indicates missing environment configuration.
 
 ## Tenant identity and theme
 
@@ -34,4 +38,4 @@ Business pages live under `/[slug]`, for example `/amitsenior`, `/amitsenior/boo
 - Swap requests are created in the existing table. Matching notifications and execution remain in the existing application. Advanced phase-two admin features (finance, recurring visits, broadcasts, editing products/gallery) are outside this delivered core.
 - Automatic notifications beyond existing database triggers are not fully ported. Booking/cancellation history remains subject to the native slot-reuse model.
 - WebMCP configuration is feature-detected. Mobile browser visual QA covered the home page and staff, service, date/time and confirmation steps at 390px. Real SMS and booking submission remain untested.
-- Current deployment targets Sites/Cloudflare; Vercel deployment would require switching from Vinext to Next.js and adapting runtime environment access.
+- The previously deployed Sites URL is a separate deployment. The default build and start commands now target Next.js/Vercel; retained Vinext configuration is not used by Vercel.

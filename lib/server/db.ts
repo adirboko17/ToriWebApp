@@ -1,10 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from 'cloudflare:workers';
 let client: SupabaseClient;
 export function setting(key: string): string {
-  return String(
-    (env as unknown as Record<string, unknown>)[key] || process.env[key] || '',
-  );
+  return process.env[key] || '';
 }
 export function db() {
   if (!client) {
