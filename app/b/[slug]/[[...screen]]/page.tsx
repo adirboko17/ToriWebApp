@@ -30,5 +30,6 @@ export default async function Page({
   const p = await params;
   if (!(await tenant(p.slug))) notFound();
   if (p.screen && p.screen.length > 1) notFound();
+  if (p.screen?.[0] && !['home', 'login', 'book', 'appointments', 'gallery', 'products', 'profile', 'notifications', 'waitlist', 'admin'].includes(p.screen[0])) notFound();
   return <BookingApp slug={p.slug} screen={p.screen?.[0] || 'home'} />;
 }

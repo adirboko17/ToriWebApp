@@ -41,9 +41,19 @@ export async function tenant(slug: string) {
     .select('*')
     .eq('web_slug', slug)
     .maybeSingle();
-  if (!error) return data;
-  if (error.code !== '42703' && error.code !== 'PGRST204')
+  if (!error && data) return data;
+  if (error && error.code !== '42703' && error.code !== 'PGRST204')
     throw new Error('טעינת העסק נכשלה');
+  // Native app identity is already maintained for every branded application.
+  const branded = await db()
+    .from('business_profile')
+    .select('*')
+    .eq('branding_client_name', slug)
+    .maybeSingle();
+  if (!branded.error && branded.data) return branded.data;
+  if (branded.error && branded.error.code !== '42703' && branded.error.code !== 'PGRST204')
+    throw new Error('טעינת העסק נכשלה');
+  if (!error) return null;
   // Compatibility until the additive web_slug migration is applied. No cross-tenant enumeration.
   const known: Record<string, string> = {
     tori: '464cb35b-0fbb-413f-91fe-1ad49addcb77',

@@ -2436,3 +2436,9 @@ p {
   }
 }
 .booking-calendar button[data-selected-single=true]{background:var(--primary)!important;color:var(--primary-foreground)!important;box-shadow:0 4px 12px color-mix(in srgb,var(--primary),transparent 80%)}.booking-calendar [data-slot=button]{font-family:Pragmati,Arial,sans-serif}.booking-calendar [data-slot=calendar] button:disabled{opacity:.32}
+ .business-sign-in > h1 {
+  text-align: center;
+  color: var(--ink);
+  font-size: 1.6rem;
+  margin: 0 0 1.25rem;
+ }

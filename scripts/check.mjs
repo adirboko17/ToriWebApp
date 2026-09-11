@@ -26,8 +26,11 @@ assert.deepEqual(calculateSlots({...base,date:'2026-09-08'}),[]);
 console.log('15 availability, timezone and phone checks passed.');
 if(process.argv.includes('--integration')){
 const origin=process.env.TORI_TEST_ORIGIN||'http://localhost:3017';const results=[];
-for(const slug of ['tori','linbitton','shirlavy']){const response=await fetch(`${origin}/api/b/${slug}/bootstrap`);assert.equal(response.status,200);const data=await response.json();assert.equal(data.user,null);assert(data.services.every(s=>s.business_id===data.profile.id));assert(!JSON.stringify(data).includes('password_hash'));results.push({slug,id:data.profile.id,color:data.profile.primary_color});}
-assert.equal(new Set(results.map(r=>r.id)).size,3);
+for(const slug of ['tori','linbitton','shirlavy','amitsenior']){const response=await fetch(`${origin}/api/b/${slug}/bootstrap`);assert.equal(response.status,200);const data=await response.json();assert.equal(data.user,null);assert(data.services.every(s=>s.business_id===data.profile.id));assert(!JSON.stringify(data).includes('password_hash'));results.push({slug,id:data.profile.id,color:data.profile.primary_color});}
+assert.equal(new Set(results.map(r=>r.id)).size,4);
+assert.equal(results.find(r=>r.slug==='amitsenior').id,'e0f757b7-afea-4aa2-a42a-1386bf938468');
+for(const route of ['/amitsenior','/amitsenior/book','/amitsenior/login','/b/amitsenior']) assert.equal((await fetch(origin+route)).status,200,route);
+for(const route of ['/unknown-business','/amitsenior/unknown-screen','/amitsenior/book/extra']) assert.equal((await fetch(origin+route)).status,404,route);
 for(const action of ['appointments','admin','waitlist','notifications']){const response=await fetch(`${origin}/api/b/tori/${action}`);assert.equal(response.status,401);}
 assert.equal((await fetch(`${origin}/api/b/missing-business/bootstrap`)).status,404);
 const forged='tori_session='+Buffer.from(JSON.stringify({userId:'c1a7476b-3608-43b4-92b3-0e3522efaaae',businessId:results[0].id,exp:Date.now()+60000})).toString('base64url')+'.forged';assert.equal((await fetch(`${origin}/api/b/tori/admin`,{headers:{cookie:forged}})).status,401);

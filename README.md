@@ -8,7 +8,7 @@ Separate RTL, mobile-first booking website for the existing Barber English Supab
 
 ## Tenant identity and theme
 
-All pages live under `/b/[slug]`. Business resolution uses `business_profile.web_slug`. Apply `supabase/migrations/20260909_business_web_slug.sql` to enable arbitrary new slugs without rebuilding. Until that additive migration is applied, existing app configuration mappings for `tori`, `linbitton`, and `shirlavy` resolve by their original UUID. The root redirects to `/b/tori` and never enumerates businesses. Theme colors, logo and imagery come from the resolved business on every load.
+Business pages live under `/[slug]`, for example `/amitsenior`, `/amitsenior/book` and `/amitsenior/profile`. Existing `/b/[slug]` links remain supported. Business resolution first checks `business_profile.web_slug`, then the existing `branding_client_name` used by native applications. Thus every uniquely named branded app gets a route without a schema change or a new code mapping. Duplicate app names fail closed. Unknown businesses return 404. The legacy three-business mapping remains only for databases without `web_slug`. The root redirects to `/tori`. Theme colors, logo and imagery come from the resolved business on every load. The home page presents business-specific phone sign-in to signed-out visitors and the business home after authentication; sessions are validated against that business on every request.
 
 ## Existing app compatibility
 

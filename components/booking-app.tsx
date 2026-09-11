@@ -21,6 +21,7 @@ import HomeSurface from './home-surface';
 import Link from 'next/link';
 import ClientPages from './client-pages';
 import AdminPanel from './admin-panel';
+import AuthForm from './auth-form';
 export default function BookingApp({
   slug,
   screen,
@@ -72,6 +73,7 @@ export default function BookingApp({
   const home = screen === 'home';
   const valid = [
     'home',
+    'login',
     'book',
     'appointments',
     'gallery',
@@ -124,7 +126,7 @@ export default function BookingApp({
       </aside>
       <main className="app-panel">
         <header>
-          <a className="wordmark" href={`/b/${slug}`}>
+          <a className="wordmark" href={`/${slug}`}>
             {p?.home_header_show_logo !== false && p?.home_logo_url ? (
               <img src={p.home_logo_url} alt={p.display_name || 'לוגו העסק'} />
             ) : p?.home_header_show_logo === false ? (
@@ -142,7 +144,7 @@ export default function BookingApp({
           </span>
           <a
             className="icon-button"
-            href={`/b/${slug}/profile`}
+            href={`/${slug}/profile`}
             aria-label="הפרופיל שלי"
           >
             <UserRound size={21} />
@@ -195,9 +197,17 @@ export default function BookingApp({
           ) : !valid ? (
             <div className="empty-state">
               <h1>העמוד לא נמצא</h1>
-              <a href={`/b/${slug}`}>חזרה לעסק</a>
+              <a href={`/${slug}`}>חזרה לעסק</a>
             </div>
-          ) : home ? (
+          ) : (home || screen === 'login') && !data.user ? (
+            <section className="business-sign-in">
+              <h1>ברוכים הבאים ל{p.display_name}</h1>
+              <AuthForm slug={slug} onDone={(user) => {
+                updateUser(user);
+                if (screen === 'login') location.assign(`/${slug}`);
+              }} />
+            </section>
+          ) : home || screen === 'login' ? (
             <HomeSurface slug={slug} data={data} messages={messages} />
           ) : screen === 'book' ? (
             <BookingFlow slug={slug} data={data} onUser={updateUser} />
@@ -216,7 +226,7 @@ export default function BookingApp({
           <nav className="native-dock" aria-label="ניווט ראשי">
             <Link
               className="dock-create"
-              href={`/b/${slug}/book`}
+              href={`/${slug}/book`}
               aria-label="קביעת תור חדש"
             >
               <Plus size={25} />
@@ -228,7 +238,7 @@ export default function BookingApp({
                 [Home, 'בית', 'home'],
               ].map(([Icon, label, path]: any) => (
                 <Link
-                  href={`/b/${slug}/${path === 'home' ? '' : path}`}
+                  href={`/${slug}/${path === 'home' ? '' : path}`}
                   aria-label={label}
                   title={label}
                   className={screen === path ? 'active' : ''}

@@ -240,7 +240,7 @@ export default function BookingFlow({
           הוספה ליומן
           <Plus size={18} />
         </button>
-        <a className="text-button" href={`/b/${slug}/appointments`}>
+        <a className="text-button" href={`/${slug}/appointments`}>
           לכל התורים שלי
         </a>
       </div>
@@ -252,7 +252,7 @@ export default function BookingFlow({
           className="icon-button"
           aria-label="חזרה"
           onClick={() =>
-            step > 0 ? setStep(step - 1) : router.push(`/b/${slug}`)
+            step > 0 ? setStep(step - 1) : router.push(`/${slug}`)
           }
         >
           <ChevronRight />

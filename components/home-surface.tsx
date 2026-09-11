@@ -84,7 +84,7 @@ export default function HomeSurface({
   return (
     <div className="native-home">
       {next ? (
-        <Link className="next-visit-card" href={`/b/${slug}/appointments`}>
+        <Link className="next-visit-card" href={`/${slug}/appointments`}>
           <div className="card-caption">
             <span className="tile-icon">
               <Clock size={20} />
@@ -110,7 +110,7 @@ export default function HomeSurface({
           </div>
         </Link>
       ) : (
-        <Link className="native-book-card" href={`/b/${slug}/book`}>
+        <Link className="native-book-card" href={`/${slug}/book`}>
           <div>
             <h1>
               {user ? `היי ${user.name.split(' ')[0]},` : 'ברוכים הבאים,'}
@@ -166,7 +166,7 @@ export default function HomeSurface({
                         ? 'available'
                         : 'pending'
                   }
-                  href={`/b/${slug}/book?worker=${worker}&date=${d}`}
+                  href={`/${slug}/book?worker=${worker}&date=${d}`}
                   aria-label={`${dateLabel(d)}${week[d] > 0 ? ', יש תורים פנויים' : week[d] === 0 ? ', אין תורים פנויים' : ''}`}
                 >
                   <span>
@@ -203,7 +203,7 @@ export default function HomeSurface({
           [Images, 'גלריה', 'gallery'],
           [Bell, 'עדכונים', 'notifications'],
         ].map(([Icon, label, route]: any) => (
-          <Link href={`/b/${slug}/${route}`} key={route}>
+          <Link href={`/${slug}/${route}`} key={route}>
             <span>
               <Icon size={24} strokeWidth={1.6} />
             </span>
@@ -232,14 +232,14 @@ export default function HomeSurface({
         <section className="home-gallery">
           <div className="section-heading">
             <h2>מהסטודיו, באהבה</h2>
-            <Link href={`/b/${slug}/gallery`}>
+            <Link href={`/${slug}/gallery`}>
               לכל העבודות
               <ChevronLeft size={16} />
             </Link>
           </div>
           <div className="home-carousel">
             {designs.map((d) => (
-              <Link href={`/b/${slug}/gallery`} key={d.id}>
+              <Link href={`/${slug}/gallery`} key={d.id}>
                 <img
                   src={d.image_urls?.[0] || d.image_url}
                   alt={d.name}
@@ -255,14 +255,14 @@ export default function HomeSurface({
         <section>
           <div className="section-heading">
             <h2>המוצרים שלנו</h2>
-            <Link href={`/b/${slug}/products`}>
+            <Link href={`/${slug}/products`}>
               לכל המוצרים
               <ChevronLeft size={16} />
             </Link>
           </div>
           <div className="home-carousel products-carousel">
             {products.map((d) => (
-              <Link href={`/b/${slug}/products`} key={d.id}>
+              <Link href={`/${slug}/products`} key={d.id}>
                 {d.image_url && (
                   <img src={d.image_url} alt={d.name} loading="lazy" />
                 )}
@@ -275,7 +275,7 @@ export default function HomeSurface({
           </div>
         </section>
       )}
-      <Link className="book-secondary" href={`/b/${slug}/book`}>
+      <Link className="book-secondary" href={`/${slug}/book`}>
         <CalendarDays size={21} />
         <span>קביעת תור חדש</span>
         <Plus size={20} />

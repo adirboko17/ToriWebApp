@@ -73,7 +73,7 @@ export default function ClientPages({
         slug={slug}
         onDone={(u) => {
           onUser(u);
-          if (u.user_type === 'admin') location.assign(`/b/${slug}/admin`);
+          if (u.user_type === 'admin') location.assign(`/${slug}/admin`);
         }}
       />
     );
@@ -148,7 +148,7 @@ export default function ClientPages({
                     : 'אין תורים קודמים'}
                 </h2>
                 <p>נמצא לך זמן שמתאים בדיוק לך.</p>
-                <a className="primary-button" href={`/b/${slug}/book`}>
+                <a className="primary-button" href={`/${slug}/book`}>
                   קביעת תור
                   <ArrowLeft size={18} />
                 </a>
@@ -198,7 +198,7 @@ export default function ClientPages({
                 )}
               </article>
             ))}
-          <a className="text-button" href={`/b/${slug}/waitlist`}>
+          <a className="text-button" href={`/${slug}/waitlist`}>
             הבקשות שלי ברשימת ההמתנה
           </a>
         </>
@@ -420,18 +420,18 @@ export default function ClientPages({
               </p>
             )}
           </form>
-          <a className="menu-row" href={`/b/${slug}/notifications`}>
+          <a className="menu-row" href={`/${slug}/notifications`}>
             <Bell size={20} />
             ההתראות שלי
             <ArrowLeft size={18} />
           </a>
-          <a className="menu-row" href={`/b/${slug}/waitlist`}>
+          <a className="menu-row" href={`/${slug}/waitlist`}>
             <Clock size={20} />
             רשימת ההמתנה
             <ArrowLeft size={18} />
           </a>
           {data.user.user_type === 'admin' && (
-            <a className="menu-row" href={`/b/${slug}/admin`}>
+            <a className="menu-row" href={`/${slug}/admin`}>
               כניסה לניהול העסק
               <ArrowLeft size={18} />
             </a>
@@ -441,7 +441,7 @@ export default function ClientPages({
             onClick={async () => {
               await api(slug, 'logout', {});
               onUser(null);
-              location.assign(`/b/${slug}`);
+              location.assign(`/${slug}`);
             }}
           >
             <LogOut size={17} />
