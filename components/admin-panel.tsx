@@ -32,6 +32,7 @@ import { api, dateLabel } from '@/lib/client';
 import { israelNow, minutes } from '@/lib/availability';
 import { phonesMatch } from '@/lib/phone';
 import AuthForm from './auth-form';
+import BrandSplash from './brand-splash';
 import AdminSettings from './admin-settings';
 import AdminBroadcast from './admin-broadcast';
 import { CatalogSheet, WaitlistSheet } from './admin-sheets';
@@ -216,10 +217,7 @@ export default function AdminPanel({
       ) : view === 'finance' ? (
         <AdminFinance slug={slug} />
       ) : !records ? (
-        <div className="empty-state" role="status">
-          <div className="loading-ring" />
-          <p>טוענים את העסק…</p>
-        </div>
+        <BrandSplash />
       ) : (
         <>
           {view === 'home' && (

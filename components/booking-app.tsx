@@ -28,6 +28,7 @@ import ClientAppointments, { type AppointmentsRequest } from './client-appointme
 import AdminPanel from './admin-panel';
 import AuthForm from './auth-form';
 import BrandImage from './brand-image';
+import BrandSplash from './brand-splash';
 import { businessLogos, headerScrim, statusBarColor } from '@/lib/branding';
 function heroRows(images: string[]) {
   const urls = images.filter((url) => /^https?:\/\//.test(url));
@@ -319,10 +320,7 @@ export default function BookingApp({
               </button>
             </div>
           ) : !data ? (
-            <div className="empty-state" role="status">
-              <div className="loading-ring" />
-              <p>מכינים את המקום שלך…</p>
-            </div>
+            <BrandSplash />
           ) : !valid ? (
             <div className="empty-state">
               <h1>העמוד לא נמצא</h1>
@@ -337,10 +335,7 @@ export default function BookingApp({
               }} />
             </section>
           ) : adminEntry ? (
-            <div className="empty-state" role="status">
-              <div className="loading-ring" />
-              <p>נכנסים לניהול…</p>
-            </div>
+            <BrandSplash />
           ) : home || screen === 'login' ? (
             <HomeSurface slug={slug} data={data} actions={homeActions} version={version} />
           ) : screen === 'book' ? (

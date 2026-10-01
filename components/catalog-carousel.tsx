@@ -78,6 +78,7 @@ export function StoryCarousel({
   people,
   href,
   onOpen,
+  onOpenItem,
   dots = false,
   title,
   subtitle,
@@ -86,6 +87,7 @@ export function StoryCarousel({
   people?: any[];
   href?: string;
   onOpen?: () => void;
+  onOpenItem?: (item: any) => void;
   dots?: boolean;
   title?: string;
   subtitle?: string;
@@ -95,10 +97,10 @@ export function StoryCarousel({
   return (
     <div className="catalog-block">
       {title && (
-        <header className="catalog-heading">
+        <div className="catalog-heading">
           <h2>{title}</h2>
           {subtitle && <p>{subtitle}</p>}
-        </header>
+        </div>
       )}
       <div className={`catalog-rail-row${centered ? ' is-centered' : ''}`} ref={row}>
         {items.map((item, index) => {
@@ -107,8 +109,8 @@ export function StoryCarousel({
           return (
             <Frame
               key={item.id}
-              href={href}
-              onOpen={onOpen}
+              href={onOpenItem ? undefined : href}
+              onOpen={onOpenItem ? () => onOpenItem(item) : onOpen}
               className="catalog-story"
               index={index}
               label={item.name || 'גלריה'}
@@ -137,6 +139,7 @@ export function ProductCarousel({
   items,
   href,
   onOpen,
+  onOpenItem,
   dots = false,
   title,
   subtitle,
@@ -144,6 +147,7 @@ export function ProductCarousel({
   items: any[];
   href?: string;
   onOpen?: () => void;
+  onOpenItem?: (item: any) => void;
   dots?: boolean;
   title?: string;
   subtitle?: string;
@@ -153,17 +157,17 @@ export function ProductCarousel({
   return (
     <div className="catalog-block">
       {title && (
-        <header className="catalog-heading">
+        <div className="catalog-heading">
           <h2>{title}</h2>
           {subtitle && <p>{subtitle}</p>}
-        </header>
+        </div>
       )}
       <div className={`catalog-rail-row${centered ? ' is-centered' : ''}`} ref={row}>
         {items.map((item, index) => (
           <Frame
             key={item.id}
-            href={href}
-            onOpen={onOpen}
+            href={onOpenItem ? undefined : href}
+            onOpen={onOpenItem ? () => onOpenItem(item) : onOpen}
             className="catalog-product"
             index={index}
             label={item.name || 'מוצר'}

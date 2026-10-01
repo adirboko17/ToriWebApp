@@ -139,7 +139,8 @@ async function handle(req: Request, ctx: any) {
             .select('id,name,image_url,phone')
             .eq('business_id', p.id)
             .eq('user_type', 'admin')
-            .or('block.is.null,block.eq.false'),
+            .or('block.is.null,block.eq.false')
+            .order('name'),
         ),
       ]);
       const profile = publicProfile(p);

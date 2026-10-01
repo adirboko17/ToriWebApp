@@ -558,14 +558,10 @@ export default function ClientAppointments({
                                   <em>1</em>
                                 </>
                               ) : swap ? (
-                                <>
+                                <span className="ch-search">
+                                  <i className="ch-ring" aria-hidden />
                                   מחפשים לך תור
-                                  <span className="ca-dots" aria-hidden>
-                                    <i />
-                                    <i />
-                                    <i />
-                                  </span>
-                                </>
+                                </span>
                               ) : (
                                 <>
                                   <ArrowLeftRight size={16} />

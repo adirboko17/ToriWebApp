@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   ArrowLeftRight,
   CloudSun,
   Clock,
+  Mail,
   MapPin,
   Megaphone,
   Moon,
@@ -15,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ProductCarousel, StoryCarousel } from './catalog-carousel';
+import { GalleryStory, ProductDetail } from './client-viewers';
 import { FacebookIcon, InstagramIcon, TikTokIcon, WhatsAppIcon, whatsappLink } from './brand-icons';
 import BrandImage from './brand-image';
 import { api } from '@/lib/client';
@@ -38,14 +40,55 @@ const periods: Record<string, { label: string; Icon: any; color?: string }> = {
 function FixedMessage({ text }: { text: string }) {
   const key = `tori-fixed-message:${text}`;
   const [open, setOpen] = useState(false);
+  const [shift, setShift] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const drag = useRef<{ y: number; t: number; moved: boolean } | null>(null);
+  const pulled = useRef(false);
+  const leavingRef = useRef(false);
   useEffect(() => {
     if (!sessionStorage.getItem(key)) setOpen(true);
   }, [key]);
-  if (!open) return null;
   const close = () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
     sessionStorage.setItem(key, '1');
-    setOpen(false);
+    setLeaving(true);
+    setDragging(false);
+    setShift(-Math.max(480, window.innerHeight));
+    window.setTimeout(() => setOpen(false), 260);
   };
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (leaving) return;
+    drag.current = { y: e.clientY, t: performance.now(), moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const start = drag.current;
+    if (!start || leaving) return;
+    const dy = e.clientY - start.y;
+    if (dy < -8) start.moved = true;
+    if (!start.moved) return;
+    setDragging(true);
+    setShift(Math.min(0, dy));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const start = drag.current;
+    drag.current = null;
+    if (!start?.moved) {
+      setDragging(false);
+      return;
+    }
+    pulled.current = true;
+    const dy = e.clientY - start.y;
+    const velocity = (dy / Math.max(1, performance.now() - start.t)) * 1000;
+    if (dy < -48 || velocity < -580) close();
+    else {
+      setShift(0);
+      setDragging(false);
+    }
+  };
+  if (!open) return null;
   const lines = text.trim().split('\n');
   const first = lines.findIndex((l) => l.trim());
   const rich = (line: string) =>
@@ -54,8 +97,25 @@ function FixedMessage({ text }: { text: string }) {
     );
   return createPortal(
     <div className="ch-fixed" dir="rtl">
-      <div className="ch-fixed-backdrop" onClick={close} />
-      <div className="ch-fixed-sheet" role="dialog" aria-modal="true" aria-label="הודעה חשובה">
+      <button type="button" className="ch-fixed-backdrop" aria-label="סגירה" onClick={close} />
+      <div
+        className={`ch-fixed-sheet${dragging ? ' is-dragging' : ''}${leaving ? ' is-leaving' : ''}`}
+        style={{
+          transform: shift ? `translateY(${shift}px)` : undefined,
+          transition: dragging ? 'none' : 'transform 240ms ease',
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="הודעה חשובה"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          drag.current = null;
+          setShift(0);
+          setDragging(false);
+        }}
+      >
         <div className="ch-fixed-head">
           <span>
             <Megaphone size={19} />
@@ -73,7 +133,18 @@ function FixedMessage({ text }: { text: string }) {
             ),
           )}
         </div>
-        <button type="button" className="ch-fixed-handle" aria-label="גררו למעלה על הפס כדי לסגור" onClick={close}>
+        <button
+          type="button"
+          className="ch-fixed-handle"
+          aria-label="גררו למעלה על הפס כדי לסגור"
+          onClick={() => {
+            if (pulled.current) {
+              pulled.current = false;
+              return;
+            }
+            close();
+          }}
+        >
           <span />
         </button>
       </div>
@@ -200,12 +271,15 @@ export default function HomeSurface({
   actions: HomeActions;
   version?: number;
 }) {
-  const { profile: p, user, staff, services } = data;
+  const { profile: p, user, staff } = data;
   const [loading, setLoading] = useState(Boolean(user));
   const [next, setNext] = useState<any>(null);
+  const [swaps, setSwaps] = useState<any[]>([]);
   const [waiting, setWaiting] = useState<any[]>([]);
   const [designs, setDesigns] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [storyId, setStoryId] = useState<string | null>(null);
+  const [product, setProduct] = useState<any>(null);
   const blocked = Boolean(user?.block);
   const awaiting = Boolean(
     user && user.user_type === 'client' && p.require_client_approval && user.client_approved === false,
@@ -215,12 +289,9 @@ export default function HomeSurface({
     const value = audience || fallback;
     return value === 'everyone' || (value === 'registered' && registered);
   };
-  const bookable = useMemo(
-    () =>
-      staff
-        .filter((s: any) => services.some((v: any) => !v.worker_id || v.worker_id === s.id))
-        .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'he')),
-    [staff, services],
+  const meterStaff = useMemo(
+    () => [...staff].sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'he')),
+    [staff],
   );
   useEffect(() => {
     let active = true;
@@ -250,12 +321,18 @@ export default function HomeSurface({
         if (active) setWaiting(rows.filter((r) => r.status === 'waiting' && r.requested_date >= today));
       })
       .catch(() => {});
+    api(slug, 'swaps')
+      .then((rows: any[]) => active && setSwaps(rows || []))
+      .catch(() => active && setSwaps([]));
     return () => {
       active = false;
     };
   }, [slug, user?.id, version]);
 
   const barber = next && staff.find((s: any) => s.id === next.barber_id);
+  const nextSwap = next && swaps.find((s) => s.appointment_id === next.id);
+  const swapOffer = nextSwap?.status === 'pending_confirmation';
+  const swapSearch = Boolean(nextSwap) && !swapOffer;
   const swapOn = p.client_swap_enabled !== false;
   const locked = next && cancelLocked(next, p.min_cancellation_hours);
   const address = p.address || '';
@@ -314,9 +391,28 @@ export default function HomeSurface({
               <div className="ch-next-actions">
                 {swapOn ? (
                   <>
-                    <button type="button" className="ch-pill" onClick={() => actions.swap(next)}>
-                      <ArrowLeftRight size={18} />
-                      להחלפת תור
+                    <button
+                      type="button"
+                      className="ch-pill"
+                      onClick={() => actions.swap(next)}
+                      aria-label={swapOffer ? 'יש הצעה להחלפה' : swapSearch ? 'מחפשים לך תור' : 'להחלפת תור'}
+                    >
+                      {swapOffer ? (
+                        <>
+                          <Mail size={18} />
+                          יש הצעה להחלפה
+                        </>
+                      ) : swapSearch ? (
+                        <span className="ch-search">
+                          <i className="ch-ring" aria-hidden />
+                          מחפשים לך תור
+                        </span>
+                      ) : (
+                        <>
+                          <ArrowLeftRight size={18} />
+                          להחלפת תור
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -400,10 +496,10 @@ export default function HomeSurface({
           </Link>
         )}
 
-        {allowed(p.availability_meter_audience, 'everyone') && bookable.length > 0 && (
+        {allowed(p.availability_meter_audience, 'everyone') && meterStaff.length > 0 && (
           <WeekMeter
             slug={slug}
-            staff={bookable}
+            staff={meterStaff}
             disabled={blocked || awaiting}
             bookHref={(worker, date) => (user ? `/${slug}/book?worker=${worker}&date=${date}` : `/${slug}/login`)}
           />
@@ -415,7 +511,7 @@ export default function HomeSurface({
           <StoryCarousel
             items={designs}
             people={staff}
-            href={`/${slug}/gallery`}
+            onOpenItem={(item) => setStoryId(item.id)}
             title="ברוך הבא לעולם שלנו"
             subtitle="חלק מהעבודות האחרונות שלנו"
           />
@@ -425,7 +521,7 @@ export default function HomeSurface({
         <div className="ch-carousel is-products">
           <ProductCarousel
             items={products}
-            href={`/${slug}/products`}
+            onOpenItem={setProduct}
             title="המוצרים שלנו"
             subtitle="המוצרים שמתאימים בדיוק בשבילכם"
           />
@@ -477,16 +573,22 @@ export default function HomeSurface({
       )}
 
       <footer className="ch-footer">
-        <p>רוצה גם אפליקציה משלך?</p>
-        <a href="https://wetori.co.il" target="_blank" rel="noreferrer">
-          לחץ כאן
-        </a>
-        <img src="/branding/tori.png" alt="Tori" />
+        <p>
+          רוצה גם אפליקציה משלך?{' '}
+          <a href="https://wetori.co.il" target="_blank" rel="noreferrer">
+            לחץ כאן
+          </a>
+        </p>
+        <img src="/branding/logotoriapp.png" alt="tori" />
       </footer>
 
       {p.home_fixed_message?.trim() && !(awaiting && p.home_fixed_message_audience === 'registered') && (
         <FixedMessage text={p.home_fixed_message} />
       )}
+      {storyId && (
+        <GalleryStory designs={designs} people={staff} initialId={storyId} onClose={() => setStoryId(null)} />
+      )}
+      <ProductDetail product={product} onClose={() => setProduct(null)} />
     </div>
   );
 }
