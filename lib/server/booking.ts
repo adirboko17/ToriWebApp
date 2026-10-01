@@ -46,7 +46,7 @@ export async function availability(
     throw new Error('תאריך לא תקין');
   const picked = await selection(p, worker, ids);
   const today = israelNow().date;
-  const days = Math.max(1, Number(p.booking_open_days_by_user?.[worker] ?? 7));
+  const days = Math.min(60, Math.max(1, Number(p.booking_open_days_by_user?.[worker] ?? p.booking_open_days ?? 7)));
   if (
     date < today ||
     (user?.user_type !== 'admin' && date > addDays(today, days - 1))
@@ -97,6 +97,64 @@ export async function availability(
       user: user?.user_type === 'admin' ? null : user,
     }),
   };
+}
+export async function availabilityDays(p: any, worker: string, ids: string[], user: any) {
+  const picked = await selection(p, worker, ids);
+  const today = israelNow().date;
+  const open = Math.min(60, Math.max(1, Number(p.booking_open_days_by_user?.[worker] ?? p.booking_open_days ?? 7)));
+  const last = addDays(today, open - 1);
+  const [hours, overrides, constraints, busy] = await Promise.all([
+    result(scoped('business_hours', p.id).or(`user_id.eq.${worker},user_id.is.null`)),
+    result(
+      scoped('business_hours_overrides', p.id)
+        .gte('date', today)
+        .lte('date', last)
+        .or(`user_id.eq.${worker},user_id.is.null`),
+    ),
+    result(
+      scoped('business_constraints', p.id)
+        .gte('date', today)
+        .lte('date', last)
+        .or(`user_id.eq.${worker},user_id.is.null`),
+    ),
+    result(
+      db()
+        .from('appointments')
+        .select('id,slot_date,slot_time,is_available,duration_minutes')
+        .eq('business_id', p.id)
+        .gte('slot_date', today)
+        .lte('slot_date', last)
+        .or(`barber_id.eq.${worker},user_id.eq.${worker}`),
+    ),
+  ]);
+  const gap = Math.max(0, p.break_by_user?.[worker] ?? p.break ?? 0);
+  const client = user?.user_type === 'admin' ? null : user;
+  const days: Record<string, number> = {};
+  for (let i = 0; i < open; i++) {
+    const date = addDays(today, i);
+    const day = new Date(date + 'T12:00:00Z').getUTCDay();
+    const pick = (rows: any[]) => rows.find((h) => h.user_id === worker) || rows.find((h) => !h.user_id);
+    const weekly = pick(hours.filter((h: any) => h.day_of_week === day));
+    const override = pick(overrides.filter((h: any) => h.date === date));
+    const effective = override ? (override.is_active ? { ...weekly, ...override } : null) : weekly;
+    const weekdayAllowed =
+      !client?.booking_allowed_weekdays?.length || client.booking_allowed_weekdays.includes(day);
+    if (!effective || effective.is_active === false || !effective.start_time || !weekdayAllowed) {
+      days[date] = -1;
+      continue;
+    }
+    days[date] = calculateSlots({
+      date,
+      weekly,
+      override,
+      constraints: constraints.filter((c: any) => c.date === date),
+      busy: busy.filter((b: any) => b.slot_date === date),
+      duration: picked.duration,
+      gap,
+      user: client,
+    }).length;
+  }
+  return { days, open };
 }
 export function ownAppointments(p: any, user: any) {
   return scoped('appointments', p.id).or(

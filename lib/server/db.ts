@@ -66,6 +66,16 @@ export async function tenant(slug: string) {
       .maybeSingle(),
   );
 }
+const brandingName = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+export function brandingAssetUrl(
+  clientName: unknown,
+  file: 'logo.png' | 'icon.png',
+) {
+  if (typeof clientName !== 'string' || !brandingName.test(clientName)) return null;
+  const base = setting('SUPABASE_URL').replace(/\/$/, '');
+  if (!/^https:\/\//.test(base)) return null;
+  return `${base}/storage/v1/object/public/app_design/branding/${clientName}/${file}`;
+}
 export function publicProfile(p: any) {
   const fields = [
     'id',
@@ -83,6 +93,9 @@ export function publicProfile(p: any) {
     'home_logo_url',
     'icon_url',
     'home_header_show_logo',
+    'home_header_logo_color_mode',
+    'home_header_logo_height',
+    'home_header_scrim_color',
     'home_header_text_without_logo',
     'staff_selection_style',
     'primary_color',
@@ -90,10 +103,20 @@ export function publicProfile(p: any) {
     'allow_multi_service_booking',
     'require_client_approval',
     'client_swap_enabled',
+    'client_swap_min_hours',
     'home_fixed_message',
     'home_fixed_message_audience',
     'availability_meter_audience',
     'booking_open_days_by_user',
+    'booking_open_days',
+    'map_audience',
+    'home_header_name_color',
+    'home_header_title_font_size',
   ];
-  return Object.fromEntries(fields.map((k) => [k, p[k]]));
+  const profile = Object.fromEntries(fields.map((k) => [k, p[k]]));
+  if (!profile.home_logo_url)
+    profile.home_logo_url = brandingAssetUrl(p.branding_client_name, 'logo.png');
+  if (!profile.icon_url)
+    profile.icon_url = brandingAssetUrl(p.branding_client_name, 'icon.png');
+  return profile;
 }

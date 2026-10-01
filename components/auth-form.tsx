@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Smartphone, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import {
   InputOTP,
   InputOTPGroup,
@@ -54,9 +54,6 @@ export default function AuthForm({
   }
   return (
     <form className="auth-form" onSubmit={submit}>
-      <div className="round-symbol">
-        <Smartphone size={30} />
-      </div>
       <h2>
         {stage === 2
           ? 'נעים להכיר, איך קוראים לך?'
@@ -67,26 +64,12 @@ export default function AuthForm({
       <p className="muted">
         {stage === 1
           ? `שלחנו קוד ב־SMS למספר ${phone}`
-          : 'התחברות עם מספר הטלפון, בלי לזכור סיסמה.'}
+          : stage === 0
+            ? 'התחברו או הירשמו עם מספר טלפון'
+            : 'התחברות עם מספר הטלפון, בלי לזכור סיסמה.'}
       </p>
       {stage === 0 && (
         <>
-          <div className="segmented">
-            <button
-              type="button"
-              className={!register ? 'selected' : ''}
-              onClick={() => setRegister(false)}
-            >
-              כבר נרשמתי
-            </button>
-            <button
-              type="button"
-              className={register ? 'selected' : ''}
-              onClick={() => setRegister(true)}
-            >
-              הרשמה ראשונה
-            </button>
-          </div>
           <label>
             מספר הטלפון שלך
             <input
@@ -99,6 +82,23 @@ export default function AuthForm({
               required
             />
           </label>
+          <p className="auth-switch">
+            {register ? (
+              <>
+                כבר יש לך חשבון?{' '}
+                <button type="button" onClick={() => setRegister(false)}>
+                  התחברו
+                </button>
+              </>
+            ) : (
+              <>
+                עדיין אין לך חשבון?{' '}
+                <button type="button" onClick={() => setRegister(true)}>
+                  הירשמו עכשיו
+                </button>
+              </>
+            )}
+          </p>
         </>
       )}
       {stage === 1 && (

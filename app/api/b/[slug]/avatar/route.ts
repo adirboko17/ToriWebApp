@@ -1,8 +1,9 @@
 import { tenant, db, result } from '@/lib/server/db';
 import { currentUser, safeUser } from '@/lib/server/session';
+import { sameOrigin } from '@/lib/server/origin';
 export async function POST(req: Request, { params }: any) {
   try {
-    if (req.headers.get('origin') !== new URL(req.url).origin)
+    if (!sameOrigin(req))
       return Response.json({ error: 'בקשה אינה מורשית' }, { status: 403 });
     const { slug } = await params;
     const p = await tenant(slug);

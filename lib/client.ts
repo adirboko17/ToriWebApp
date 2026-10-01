@@ -62,13 +62,32 @@ export function theme(color?: string) {
     .map((i) => parseInt(primary.slice(i, i + 2), 16) / 255)
     .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
   const lum = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  const heroLight = lum * 0.78 ** 2.2 <= 0.4;
   return {
+    '--hero-fg': heroLight ? '#ffffff' : '#141414',
+    '--hero-muted': heroLight ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.6)',
+    '--hero-line': heroLight ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.22)',
+    '--hero-focus': heroLight ? '#ffffff' : 'var(--on-light)',
+    '--hero-placeholder': heroLight ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.4)',
     '--primary': primary,
     '--primary-foreground': lum > 0.4 ? '#172015' : '#ffffff',
     '--tint': `color-mix(in srgb, ${primary}, white 91%)`,
     '--ink': `color-mix(in srgb, ${primary}, black 35%)`,
+    '--on-light': lum > 0.4 ? `color-mix(in srgb, ${primary}, black 46%)` : primary,
+    '--on-primary': lum > 0.4 ? `color-mix(in srgb, ${primary}, black 62%)` : '#ffffff',
+    '--on-primary-muted':
+      lum > 0.4
+        ? `color-mix(in srgb, color-mix(in srgb, ${primary}, black 62%) 74%, transparent)`
+        : 'rgba(255,255,255,0.88)',
+    '--save-bg': lum > 0.4 ? `color-mix(in srgb, ${primary}, black 52%)` : primary,
+    '--save-fg': '#ffffff',
     '--ring': primary,
   } as React.CSSProperties;
+}
+export function applyTheme(color: string) {
+  const vars = Object.entries(theme(color));
+  for (const target of [document.documentElement, document.querySelector<HTMLElement>('.site-shell')])
+    for (const [key, value] of vars) target?.style.setProperty(key, String(value));
 }
 export function dateLabel(date: string) {
   return new Date(date + 'T12:00:00Z').toLocaleDateString('he-IL', {

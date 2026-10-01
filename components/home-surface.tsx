@@ -1,320 +1,492 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  Plus,
+  ArrowLeftRight,
+  CloudSun,
   Clock,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   MapPin,
-  Phone,
-  Camera,
-  Bell,
-  Images,
-  Heart,
-  ArrowLeft,
-  RefreshCw,
+  Megaphone,
+  Moon,
+  Plus,
+  Sun,
+  User,
+  X,
 } from 'lucide-react';
-import { api, dateLabel } from '@/lib/client';
+import { ProductCarousel, StoryCarousel } from './catalog-carousel';
+import { FacebookIcon, InstagramIcon, TikTokIcon, WhatsAppIcon, whatsappLink } from './brand-icons';
+import BrandImage from './brand-image';
+import { api } from '@/lib/client';
+import { businessLogos } from '@/lib/branding';
 import { israelNow, addDays } from '@/lib/availability';
+import { isUpcoming, cancelLocked, hebrewDay } from '@/lib/client-appointments';
+
+export type HomeActions = {
+  openAppointments: () => void;
+  cancel: (appointment: any) => void;
+  swap: (appointment: any) => void;
+};
+
+const periods: Record<string, { label: string; Icon: any; color?: string }> = {
+  morning: { label: 'בוקר', Icon: Sun, color: '#F5A623' },
+  afternoon: { label: 'צהריים', Icon: CloudSun },
+  evening: { label: 'ערב', Icon: Moon },
+  any: { label: 'כל זמן', Icon: Clock },
+};
+
+function FixedMessage({ text }: { text: string }) {
+  const key = `tori-fixed-message:${text}`;
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!sessionStorage.getItem(key)) setOpen(true);
+  }, [key]);
+  if (!open) return null;
+  const close = () => {
+    sessionStorage.setItem(key, '1');
+    setOpen(false);
+  };
+  const lines = text.trim().split('\n');
+  const first = lines.findIndex((l) => l.trim());
+  const rich = (line: string) =>
+    line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/).map((part, i) =>
+      /^\*{1,2}[^*]+\*{1,2}$/.test(part) ? <b key={i}>{part.replace(/\*/g, '')}</b> : part,
+    );
+  return createPortal(
+    <div className="ch-fixed" dir="rtl">
+      <div className="ch-fixed-backdrop" onClick={close} />
+      <div className="ch-fixed-sheet" role="dialog" aria-modal="true" aria-label="הודעה חשובה">
+        <div className="ch-fixed-head">
+          <span>
+            <Megaphone size={19} />
+          </span>
+          <h2>הודעה חשובה</h2>
+        </div>
+        <div className="ch-fixed-body">
+          {lines.map((line, i) =>
+            !line.trim() ? (
+              <i key={i} />
+            ) : (
+              <p key={i} className={i === first ? 'is-title' : ''}>
+                {rich(line)}
+              </p>
+            ),
+          )}
+        </div>
+        <button type="button" className="ch-fixed-handle" aria-label="גררו למעלה על הפס כדי לסגור" onClick={close}>
+          <span />
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function WeekMeter({
+  slug,
+  staff,
+  disabled,
+  bookHref,
+}: {
+  slug: string;
+  staff: any[];
+  disabled: boolean;
+  bookHref: (worker: string, date: string) => string;
+}) {
+  const [worker, setWorker] = useState(staff[0]?.id || '');
+  const [days, setDays] = useState<Record<string, number> | null>(null);
+  const today = israelNow().date;
+  useEffect(() => {
+    if (!worker) return;
+    let active = true;
+    setDays(null);
+    api(slug, 'week', undefined, { worker })
+      .then((r) => active && setDays(r.days || {}))
+      .catch(() => active && setDays({}));
+    return () => {
+      active = false;
+    };
+  }, [slug, worker]);
+  const dates = Array.from({ length: 6 }, (_, i) => addDays(today, i));
+  const max = Math.max(1, ...dates.map((d) => days?.[d] || 0));
+  return (
+    <section className={`ch-meter${disabled ? ' is-disabled' : ''}`}>
+      <h2>מד זמינות תורים</h2>
+      {staff.length > 1 && (
+        <>
+          <p>בחרו איש צוות לצפייה בזמינות</p>
+          <div className="ch-meter-staff">
+            {staff.map((s) => (
+              <button
+                type="button"
+                key={s.id}
+                className={s.id === worker ? 'is-on' : ''}
+                onClick={() => setWorker(s.id)}
+                aria-pressed={s.id === worker}
+              >
+                <span>
+                  {/^https:\/\//.test(s.image_url || '') ? (
+                    <img src={s.image_url} alt="" />
+                  ) : (
+                    <em>{String(s.name || '?').trim().charAt(0)}</em>
+                  )}
+                </span>
+                <small>{String(s.name || '').split(' ')[0]}</small>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <hr />
+      <div className="ch-meter-days">
+        {dates.map((d, i) => {
+          const count = days?.[d] || 0;
+          const ratio = count / max;
+          const empty = days !== null && count <= 0;
+          const label =
+            i === 0 && count > 0
+              ? 'היום'
+              : new Date(d + 'T12:00:00Z').toLocaleDateString('he-IL', { weekday: 'short', timeZone: 'UTC' });
+          const fill = (
+            <>
+              <span className="ch-gauge">
+                <i
+                  style={
+                    {
+                      height: `${Math.round(Math.sqrt(ratio) * 76)}px`,
+                      opacity: count > 0 ? 0.28 + ratio * 0.72 : 0,
+                      transitionDelay: `${i * 60}ms`,
+                    } as React.CSSProperties
+                  }
+                />
+              </span>
+              <small className={i === 0 && count > 0 ? 'is-today' : ''}>{label}</small>
+            </>
+          );
+          return empty || disabled || days === null ? (
+            <span key={d} className={`ch-day${empty ? ' is-empty' : ''}`}>
+              {fill}
+            </span>
+          ) : (
+            <Link key={d} className="ch-day" href={bookHref(worker, d)} aria-label={`${d}, ${count} תורים פנויים`}>
+              {fill}
+            </Link>
+          );
+        })}
+      </div>
+      <div className="ch-meter-legend">
+        <span>
+          <i className="is-full" />
+          תורים פנויים
+        </span>
+        <b>·</b>
+        <span>
+          <i />
+          אין תורים
+        </span>
+      </div>
+    </section>
+  );
+}
+
 export default function HomeSurface({
   slug,
   data,
-  messages,
+  actions,
+  version = 0,
 }: {
   slug: string;
   data: any;
-  messages: any[];
+  actions: HomeActions;
+  version?: number;
 }) {
   const { profile: p, user, staff, services } = data;
-  const [next, setNext] = useState<any>(null),
-    [designs, setDesigns] = useState<any[]>([]),
-    [products, setProducts] = useState<any[]>([]),
-    [worker, setWorker] = useState(
-      staff.find((s: any) =>
-        services.some((v: any) => !v.worker_id || v.worker_id === s.id),
-      )?.id || '',
-    ),
-    [week, setWeek] = useState<Record<string, number>>({}),
-    [weekError, setWeekError] = useState(false);
-  const today = israelNow().date;
-  const showMeter =
-    p.availability_meter_audience === 'everyone' ||
-    (p.availability_meter_audience === 'registered' && user);
+  const [loading, setLoading] = useState(Boolean(user));
+  const [next, setNext] = useState<any>(null);
+  const [waiting, setWaiting] = useState<any[]>([]);
+  const [designs, setDesigns] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const blocked = Boolean(user?.block);
+  const awaiting = Boolean(
+    user && user.user_type === 'client' && p.require_client_approval && user.client_approved === false,
+  );
+  const registered = Boolean(user) && !awaiting;
+  const allowed = (audience: string | undefined, fallback: string) => {
+    const value = audience || fallback;
+    return value === 'everyone' || (value === 'registered' && registered);
+  };
+  const bookable = useMemo(
+    () =>
+      staff
+        .filter((s: any) => services.some((v: any) => !v.worker_id || v.worker_id === s.id))
+        .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'he')),
+    [staff, services],
+  );
   useEffect(() => {
     let active = true;
     api(slug, 'gallery')
-      .then((r) => active && setDesigns(r.slice(0, 8)))
+      .then((r) => active && setDesigns(r))
       .catch(() => {});
     api(slug, 'products')
-      .then((r) => active && setProducts(r.slice(0, 6)))
+      .then((r) => active && setProducts(r))
       .catch(() => {});
-    if (user)
-      api(slug, 'appointments')
-        .then((r) => {
-          const now = israelNow();
-          const future = r.filter(
-            (a: any) =>
-              ['confirmed', 'pending'].includes(a.status) &&
-              (a.slot_date > now.date ||
-                (a.slot_date === now.date &&
-                  +a.slot_time.slice(0, 2) * 60 + +a.slot_time.slice(3, 5) >=
-                    now.minute)),
-          );
-          if (active) setNext(future[0] || null);
-        })
-        .catch(() => {});
     return () => {
       active = false;
     };
-  }, [slug, user?.id]);
+  }, [slug]);
   useEffect(() => {
-    if (!showMeter || !worker) return;
+    if (!user) return;
     let active = true;
-    setWeek({});
-    setWeekError(false);
-    api(slug, 'week', undefined, { worker })
-      .then((r) => active && setWeek(r.days))
-      .catch(() => active && setWeekError(true));
+    setLoading(true);
+    api(slug, 'appointments')
+      .then((rows: any[]) => {
+        if (active) setNext(rows.filter(isUpcoming)[0] || null);
+      })
+      .catch(() => active && setNext(null))
+      .finally(() => active && setLoading(false));
+    api(slug, 'waitlist')
+      .then((rows: any[]) => {
+        const today = israelNow().date;
+        if (active) setWaiting(rows.filter((r) => r.status === 'waiting' && r.requested_date >= today));
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
-  }, [slug, worker, !!showMeter, user?.id]);
+  }, [slug, user?.id, version]);
+
+  const barber = next && staff.find((s: any) => s.id === next.barber_id);
+  const swapOn = p.client_swap_enabled !== false;
+  const locked = next && cancelLocked(next, p.min_cancellation_hours);
+  const address = p.address || '';
+  const phone = p.phone || '';
+  const logos = businessLogos(p, slug);
+  const bookLink = user ? `/${slug}/book` : `/${slug}/login`;
+  const socials = [
+    p.instagram_url && { href: p.instagram_url, label: 'אינסטגרם', Icon: InstagramIcon, color: '#E4405F' },
+    p.facebook_url && { href: p.facebook_url, label: 'פייסבוק', Icon: FacebookIcon, color: '#1877F2' },
+    p.tiktok_url && { href: p.tiktok_url, label: 'טיקטוק', Icon: TikTokIcon, color: '#000000' },
+    phone && {
+      href: whatsappLink(phone, 'שלום, אשמח ליצור קשר'),
+      label: 'שליחת הודעה בוואטסאפ',
+      Icon: WhatsAppIcon,
+      color: '#25D366',
+    },
+  ].filter(Boolean) as any[];
+
   return (
-    <div className="native-home">
-      {next ? (
-        <Link className="next-visit-card" href={`/${slug}/appointments`}>
-          <div className="card-caption">
-            <span className="tile-icon">
-              <Clock size={20} />
-            </span>
-            <h2>התור הבא שלך</h2>
-            <ChevronLeft size={18} />
-          </div>
-          <div className="next-visit-body">
-            <div className="next-visit-date">
-              <strong>{+next.slot_date.slice(8)}</strong>
-              <span>
-                {new Date(next.slot_date + 'T12:00:00Z').toLocaleDateString(
-                  'he-IL',
-                  { month: 'short', weekday: 'short' },
+    <div className="ch">
+      <div className="ch-section ch-first">
+        {loading ? (
+          <div className="ch-loading">טוען את התורים שלך...</div>
+        ) : next ? (
+          <>
+            <article className="ch-next">
+              <button type="button" className="ch-next-tap" onClick={actions.openAppointments} aria-label="התורים שלי">
+                <div className="ch-card-head">
+                  <span className="ch-next-date">
+                    {new Date(next.slot_date + 'T12:00:00Z').toLocaleDateString('he-IL', {
+                      day: 'numeric',
+                      month: 'long',
+                      timeZone: 'UTC',
+                    })}
+                  </span>
+                  <span className="ch-next-label">התור הבא שלך</span>
+                </div>
+                <div className="ch-next-body">
+                  <span className="ch-avatar">
+                    <BrandImage
+                      sources={[barber?.image_url].filter((u) => u && !logos.includes(u))}
+                      alt=""
+                      fallback={<User size={22} />}
+                    />
+                  </span>
+                  <span className="ch-next-copy">
+                    <strong>{next.service_name || 'Service'}</strong>
+                    {barber?.name && <small>{barber.name}</small>}
+                  </span>
+                  <i className="ch-hairline" />
+                  <b className="ch-next-time">{next.slot_time.slice(0, 5)}</b>
+                </div>
+              </button>
+            </article>
+            {user.user_type !== 'admin' && (
+              <div className="ch-next-actions">
+                {swapOn ? (
+                  <>
+                    <button type="button" className="ch-pill" onClick={() => actions.swap(next)}>
+                      <ArrowLeftRight size={18} />
+                      להחלפת תור
+                    </button>
+                    <button
+                      type="button"
+                      className={`ch-cancel-dot${locked ? ' is-locked' : ''}`}
+                      aria-label="ביטול התור"
+                      onClick={() => actions.cancel(next)}
+                    >
+                      <X size={20} strokeWidth={2.6} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className={`ch-pill is-cancel${locked ? ' is-locked' : ''}`}
+                    onClick={() => actions.cancel(next)}
+                  >
+                    <X size={18} strokeWidth={2.6} />
+                    ביטול התור
+                  </button>
                 )}
+              </div>
+            )}
+          </>
+        ) : (
+          <Link
+            className={`ch-book${blocked || awaiting ? ' is-disabled' : ''}`}
+            href={bookLink}
+            onClick={(e) => {
+              if (!blocked && !awaiting) return;
+              e.preventDefault();
+              alert(
+                blocked
+                  ? 'החשבון חסום\nהחשבון שלך חסום. לא ניתן לקבוע תורים.'
+                  : 'ממתין לאישור\nההרשמה שלך ממתינה לאישור העסק. עדיין לא ניתן לקבוע תורים.',
+              );
+            }}
+          >
+            <span className="ch-lava" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+            <span className="ch-book-copy">
+              <strong>{user?.name ? `שלום ${String(user.name).trim().split(/\s+/)[0]}` : 'שלום'}</strong>
+              <small>לחץ כאן כדי לקבוע תור חדש</small>
+            </span>
+            <span className="ch-book-plus">
+              <Plus size={26} strokeWidth={2.4} />
+            </span>
+          </Link>
+        )}
+
+        {waiting.length > 0 && (
+          <Link className="ch-wait" href={`/${slug}/waitlist`}>
+            <div className="ch-card-head">
+              <span className="ch-next-date">{hebrewDay(waiting[0].requested_date)}</span>
+              <span className="ch-wait-label">רשימת המתנה</span>
+            </div>
+            <div className="ch-next-body">
+              <span className="ch-wait-icon">
+                <Clock size={22} />
+              </span>
+              <span className="ch-next-copy">
+                <strong>{waiting[0].service_name || 'נמצאים ברשימת המתנה'}</strong>
+                {(() => {
+                  const period = periods[waiting[0].time_period] || periods.any;
+                  return (
+                    <small className="ch-period" style={period.color ? { color: period.color } : undefined}>
+                      <period.Icon size={13} />
+                      {period.label}
+                    </small>
+                  );
+                })()}
+              </span>
+              <i className="ch-hairline" />
+              <span className="ch-wait-count">
+                <b>{waiting.length}</b>
+                <small>הקישו לפרטים</small>
               </span>
             </div>
-            <div>
-              <strong>{next.service_name}</strong>
-              <p>{staff.find((s: any) => s.id === next.barber_id)?.name}</p>
-            </div>
-            <b>{next.slot_time.slice(0, 5)}</b>
-          </div>
-        </Link>
-      ) : (
-        <Link className="native-book-card" href={`/${slug}/book`}>
-          <div>
-            <h1>
-              {user ? `היי ${user.name.split(' ')[0]},` : 'ברוכים הבאים,'}
-            </h1>
-            <p>התור הבא שלך מתחיל כאן</p>
-          </div>
-          <span className="native-plus">
-            <Plus size={27} />
-          </span>
-        </Link>
-      )}
-      {user && p.require_client_approval && user.client_approved === false && (
-        <p className="pending-approval">
-          <Clock size={17} /> ההרשמה הושלמה, ממתינים לאישור העסק
-        </p>
-      )}
-      {showMeter && (
-        <section className="availability-card">
-          <div className="card-caption">
-            <span className="tile-icon">
-              <CalendarDays size={20} />
-            </span>
-            <h2>הזמינות הקרובה</h2>
-            {staff.length > 1 && (
-              <select
-                aria-label="זמינות לפי איש צוות"
-                value={worker}
-                onChange={(e) => setWorker(e.target.value)}
-              >
-                {staff
-                  .filter((s: any) =>
-                    services.some(
-                      (v: any) => !v.worker_id || v.worker_id === s.id,
-                    ),
-                  )
-                  .map((s: any) => (
-                    <option value={s.id} key={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-            )}
-          </div>
-          <div className="native-week">
-            {Array.from({ length: 7 }, (_, i) => addDays(today, i)).map(
-              (d, i) => (
-                <Link
-                  key={d}
-                  className={
-                    week[d] === 0
-                      ? 'full'
-                      : week[d] > 0
-                        ? 'available'
-                        : 'pending'
-                  }
-                  href={`/${slug}/book?worker=${worker}&date=${d}`}
-                  aria-label={`${dateLabel(d)}${week[d] > 0 ? ', יש תורים פנויים' : week[d] === 0 ? ', אין תורים פנויים' : ''}`}
-                >
-                  <span>
-                    {i === 0
-                      ? 'היום'
-                      : new Date(d + 'T12:00:00Z').toLocaleDateString('he-IL', {
-                          weekday: 'short',
-                        })}
-                  </span>
-                  <strong>{+d.slice(8)}</strong>
-                  <i />
-                </Link>
-              ),
-            )}
-          </div>
-          <div className="availability-footer">
-            {weekError ? (
-              <span>הזמינות מתעדכנת במסך קביעת התור</span>
-            ) : (
-              <>
-                <span>
-                  <i />
-                  יש מקום
-                </span>
-                <span>בחרו יום כדי לקבוע תור</span>
-              </>
-            )}
-          </div>
-        </section>
-      )}
-      <div className="home-shortcuts">
-        {[
-          [CalendarDays, 'התורים שלי', 'appointments'],
-          [Images, 'גלריה', 'gallery'],
-          [Bell, 'עדכונים', 'notifications'],
-        ].map(([Icon, label, route]: any) => (
-          <Link href={`/${slug}/${route}`} key={route}>
-            <span>
-              <Icon size={24} strokeWidth={1.6} />
-            </span>
-            <strong>{label}</strong>
           </Link>
-        ))}
+        )}
+
+        {allowed(p.availability_meter_audience, 'everyone') && bookable.length > 0 && (
+          <WeekMeter
+            slug={slug}
+            staff={bookable}
+            disabled={blocked || awaiting}
+            bookHref={(worker, date) => (user ? `/${slug}/book?worker=${worker}&date=${date}` : `/${slug}/login`)}
+          />
+        )}
       </div>
-      {p.home_fixed_message && (
-        <div className="studio-message">
-          <span className="tile-icon">
-            <Heart size={19} />
-          </span>
-          <p>{p.home_fixed_message}</p>
+
+      {designs.length > 0 && (
+        <div className="ch-carousel">
+          <StoryCarousel
+            items={designs}
+            people={staff}
+            href={`/${slug}/gallery`}
+            title="ברוך הבא לעולם שלנו"
+            subtitle="חלק מהעבודות האחרונות שלנו"
+          />
         </div>
       )}
-      {messages.map((m) => (
-        <div className="studio-message" key={m.id}>
-          <Bell size={19} />
-          <div>
-            <strong>{m.title}</strong>
-            <p>{m.content}</p>
-          </div>
+      {products.length > 0 && (
+        <div className="ch-carousel is-products">
+          <ProductCarousel
+            items={products}
+            href={`/${slug}/products`}
+            title="המוצרים שלנו"
+            subtitle="המוצרים שמתאימים בדיוק בשבילכם"
+          />
         </div>
-      ))}
-      {!!designs.length && (
-        <section className="home-gallery">
-          <div className="section-heading">
-            <h2>מהסטודיו, באהבה</h2>
-            <Link href={`/${slug}/gallery`}>
-              לכל העבודות
-              <ChevronLeft size={16} />
-            </Link>
-          </div>
-          <div className="home-carousel">
-            {designs.map((d) => (
-              <Link href={`/${slug}/gallery`} key={d.id}>
-                <img
-                  src={d.image_urls?.[0] || d.image_url}
-                  alt={d.name}
-                  loading="lazy"
-                />
-                <span>{d.name}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
       )}
-      {!!products.length && (
-        <section>
-          <div className="section-heading">
-            <h2>המוצרים שלנו</h2>
-            <Link href={`/${slug}/products`}>
-              לכל המוצרים
-              <ChevronLeft size={16} />
-            </Link>
-          </div>
-          <div className="home-carousel products-carousel">
-            {products.map((d) => (
-              <Link href={`/${slug}/products`} key={d.id}>
-                {d.image_url && (
-                  <img src={d.image_url} alt={d.name} loading="lazy" />
+
+      {allowed(p.map_audience, 'everyone') && (
+        <div className="ch-section">
+          <a
+            className="ch-map"
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || 'Tel Aviv-Yafo, Israel')}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <iframe
+              title="מפה"
+              tabIndex={-1}
+              loading="lazy"
+              src={`https://maps.google.com/maps?q=${encodeURIComponent(address || 'Tel Aviv-Yafo, Israel')}&z=15&output=embed`}
+            />
+            <span className="ch-map-wash" />
+            <span className="ch-map-pin" aria-hidden>
+              <span className="ch-map-balloon">
+                {logos.length ? (
+                  <BrandImage sources={logos} alt="" fallback={<MapPin size={24} />} />
+                ) : (
+                  <MapPin size={24} />
                 )}
-                <span>
-                  {d.name}
-                  <b>₪{d.price}</b>
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
+              </span>
+              <i className="ch-map-tip" />
+              <i className="ch-map-ground" />
+            </span>
+            <span className="ch-map-bar">
+              <strong>{p.display_name}</strong>
+              <small>{address || 'Tel Aviv-Yafo, Israel'}</small>
+            </span>
+          </a>
+        </div>
       )}
-      <Link className="book-secondary" href={`/${slug}/book`}>
-        <CalendarDays size={21} />
-        <span>קביעת תור חדש</span>
-        <Plus size={20} />
-      </Link>
-      {p.address && (
-        <a
-          className="studio-address"
-          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="address-pin">
-            <MapPin size={28} />
-          </span>
-          <div>
-            <h2>מחכים לך כאן</h2>
-            <p>{p.address}</p>
-          </div>
-          <ChevronLeft size={19} />
+
+      {socials.length > 0 && (
+        <div className="ch-social">
+          {socials.map(({ href, label, Icon, color }) => (
+            <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} style={{ color }}>
+              <Icon size={22} />
+            </a>
+          ))}
+        </div>
+      )}
+
+      <footer className="ch-footer">
+        <p>רוצה גם אפליקציה משלך?</p>
+        <a href="https://wetori.co.il" target="_blank" rel="noreferrer">
+          לחץ כאן
         </a>
-      )}
-      <div className="contact-actions">
-        {p.phone && (
-          <a href={`tel:${p.phone.replace(/[^+\d]/g, '')}`}>
-            <Phone size={19} />
-            לדבר איתנו
-          </a>
-        )}
-        {p.instagram_url && /^https:\/\//.test(p.instagram_url) && (
-          <a href={p.instagram_url} target="_blank" rel="noreferrer">
-            <Camera size={19} />
-            אינסטגרם
-          </a>
-        )}
-      </div>
-      <footer>
-        <span>Tori ♡</span>
-        <small>הזמן שלך. המקום שלך.</small>
+        <img src="/branding/tori.png" alt="Tori" />
       </footer>
+
+      {p.home_fixed_message?.trim() && !(awaiting && p.home_fixed_message_audience === 'registered') && (
+        <FixedMessage text={p.home_fixed_message} />
+      )}
     </div>
   );
 }

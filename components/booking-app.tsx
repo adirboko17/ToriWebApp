@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   CalendarDays,
@@ -14,16 +15,55 @@ import {
   Camera,
   Sparkles,
   Plus,
+  Settings,
+  Wallet,
 } from 'lucide-react';
 import { api, theme } from '@/lib/client';
 import BookingFlow from './booking-flow';
-import HomeSurface from './home-surface';
+import HomeSurface, { type HomeActions } from './home-surface';
 import Link from 'next/link';
 import ClientPages from './client-pages';
+import ClientProfile from './client-profile';
+import ClientAppointments, { type AppointmentsRequest } from './client-appointments';
 import AdminPanel from './admin-panel';
 import AuthForm from './auth-form';
 import BrandImage from './brand-image';
-import { businessLogos } from '@/lib/branding';
+import { businessLogos, headerScrim, statusBarColor } from '@/lib/branding';
+function heroRows(images: string[]) {
+  const urls = images.filter((url) => /^https?:\/\//.test(url));
+  const rows: string[][] = [[], [], []];
+  urls.forEach((url, index) => rows[index % 3].push(url));
+  const fallback = urls[0];
+  if (!fallback) return rows;
+  for (const row of rows) {
+    if (!row.length) row.push(fallback);
+    while (row.length < 4) row.push(...row.slice());
+  }
+  return rows;
+}
+function HeroMarquee({ images }: { images: string[] }) {
+  const rows = heroRows(images);
+  if (!rows[0]?.length) return null;
+  return (
+    <div className="hero-marquee">
+      <div className="hero-marquee-plane">
+        {rows.map((row, rowIndex) => (
+          <div
+            className={`hero-marquee-row${rowIndex % 2 ? ' is-reverse' : ''}`}
+            key={rowIndex}
+            style={{ '--tiles': row.length } as React.CSSProperties}
+          >
+            <div className="hero-marquee-track">
+              {[...row, ...row].map((src, index) => (
+                <img src={src} alt="" key={`${rowIndex}-${index}`} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 export default function BookingApp({
   slug,
   screen,
@@ -32,8 +72,7 @@ export default function BookingApp({
   screen: string;
 }) {
   const [data, setData] = useState<any>(null),
-    [error, setError] = useState(''),
-    [messages, setMessages] = useState<any[]>([]);
+    [error, setError] = useState('');
   useEffect(() => {
     let active = true;
     setData(null);
@@ -48,17 +87,42 @@ export default function BookingApp({
       .catch((e) => {
         if (active) setError(e.message);
       });
-    api(slug, 'messages')
-      .then((r) => {
-        if (active) setMessages(r);
-      })
-      .catch(() => {});
     return () => {
       active = false;
     };
   }, [slug]);
   const updateUser = (user: any) => setData((d: any) => ({ ...d, user }));
   const p = data?.profile;
+  const router = useRouter();
+  const [sheetOpen, setSheetOpen] = useState(screen === 'appointments');
+  const [request, setRequest] = useState<AppointmentsRequest | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (screen === 'appointments') setSheetOpen(true);
+  }, [screen]);
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    if (screen === 'appointments') router.replace(`/${slug}`, { scroll: false });
+  }, [screen, router, slug]);
+  const homeActions = useMemo<HomeActions>(
+    () => ({
+      openAppointments: () => setSheetOpen(true),
+      cancel: (appointment) => setRequest((r) => ({ type: 'cancel', appointment, n: (r?.n || 0) + 1 })),
+      swap: (appointment) => setRequest((r) => ({ type: 'swap', appointment, n: (r?.n || 0) + 1 })),
+    }),
+    [],
+  );
+  const startBooking = (e: React.MouseEvent) => {
+    const user = data?.user;
+    if (!user || user.user_type === 'admin') return;
+    if (user.block) {
+      e.preventDefault();
+      alert('החשבון שלך חסום. לא ניתן לקבוע תורים.');
+    } else if (user.client_approved === false) {
+      e.preventDefault();
+      alert('ההרשמה שלך ממתינה לאישור העסק. עדיין לא ניתן לקבוע תורים.');
+    }
+  };
   useEffect(() => {
     const colors = theme(p?.primary_color);
     for (const [key, value] of Object.entries(colors))
@@ -68,11 +132,67 @@ export default function BookingApp({
         document.documentElement.style.removeProperty(key);
     };
   }, [p?.primary_color]);
+  const home = screen === 'home' || screen === 'appointments';
+  const isAdmin = data?.user?.user_type === 'admin';
+  const requestedView = useSearchParams().get('v') || 'home';
+  const adminView = ['home', 'calendar', 'hours', 'notifications', 'waitlist', 'settings', 'finance'].includes(requestedView)
+    ? requestedView
+    : 'home';
+  const heroScreen = home || (screen === 'admin' && isAdmin && adminView === 'home');
+  const topColor = p && heroScreen ? statusBarColor(p) : null;
+  useEffect(() => {
+    if (!heroScreen) return;
+    const root = document.documentElement;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const y = Math.max(0, window.scrollY);
+      const fade = Math.max(0, 1 - y / 220);
+      root.style.setProperty('--hero-fade', fade.toFixed(3));
+      root.style.setProperty('--hero-shift', `${(-Math.min(y, 900) * 0.22).toFixed(1)}px`);
+      root.toggleAttribute('data-hero-faded', fade < 0.05);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      root.style.removeProperty('--hero-fade');
+      root.style.removeProperty('--hero-shift');
+      root.removeAttribute('data-hero-faded');
+    };
+  }, [heroScreen]);
+  useEffect(() => {
+    if (!topColor) return;
+    const root = document.documentElement;
+    const previous = root.style.backgroundColor;
+    root.style.backgroundColor = topColor;
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    const created = !meta;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    const previousMeta = meta.content;
+    meta.content = topColor;
+    return () => {
+      root.style.backgroundColor = previous;
+      if (created) meta.remove();
+      else meta.content = previousMeta;
+    };
+  }, [topColor]);
   const hero =
     p?.home_hero_mode === 'single_fullbleed'
       ? p?.home_hero_single_url
       : p?.home_hero_images?.[0];
-  const home = screen === 'home';
+  const adminEntry = isAdmin && (home || screen === 'login');
+  useEffect(() => {
+    if (adminEntry) location.assign(`/${slug}/admin`);
+  }, [adminEntry, slug]);
   const valid = [
     'home',
     'login',
@@ -89,10 +209,30 @@ export default function BookingApp({
     hero && /^https?:\/\//.test(hero)
       ? { backgroundImage: `url(${JSON.stringify(hero)})` }
       : undefined;
+  const logoMode = p?.home_header_logo_color_mode === 'original' ? 'original' : 'white';
+  const scrim = headerScrim(p);
+  const logoHeight = Number(p?.home_header_logo_height);
+  const titleSize = Number(p?.home_header_title_font_size);
+  const showDock =
+    screen !== 'book' &&
+    screen !== 'login' &&
+    !adminEntry &&
+    (!home || Boolean(data?.user));
+  const adminDock = showDock && isAdmin;
+  const clientScreen = screen === 'appointments' ? 'home' : screen;
+  const nativeClient = !isAdmin && ['book', 'profile'].includes(screen);
   return (
     <div
-      className={`site-shell screen-${screen} ${home ? 'home-screen' : 'inner-screen'}`}
-      style={theme(p?.primary_color)}
+      className={`site-shell screen-${clientScreen}${nativeClient ? ` shell-native shell-client-${screen}` : ''} ${heroScreen ? 'home-screen' : 'inner-screen'}${showDock ? ' has-dock' : ''}${screen === 'admin' && isAdmin && ['calendar', 'hours', 'notifications', 'settings', 'finance'].includes(adminView) ? ` shell-native shell-${adminView}` : ''}`}
+      data-logo-mode={logoMode}
+      style={{
+        ...theme(p?.primary_color),
+        '--header-scrim': scrim,
+        '--scrim-base': p ? statusBarColor(p) : '#000',
+        '--logo-height': `${logoHeight > 0 ? Math.min(120, Math.max(28, logoHeight)) : 52}px`,
+        ...(titleSize > 0 ? { '--title-size': `${Math.min(56, Math.max(18, titleSize))}px` } : {}),
+        ...(p?.home_header_name_color ? { '--title-color': p.home_header_name_color } : {}),
+      } as React.CSSProperties}
     >
       <aside className="visual-panel">
         {p?.home_hero_mode === 'marquee' && p.home_hero_images?.length ? (
@@ -144,24 +284,11 @@ export default function BookingApp({
           <span className="header-note">
             {p?.display_name || 'YOUR TIME · YOUR BEAUTY'}
           </span>
-          <a
-            className="icon-button"
-            href={`/${slug}/profile`}
-            aria-label="הפרופיל שלי"
-          >
-            <UserRound size={21} />
-          </a>
         </header>
-        {home && (
+        {heroScreen && (
           <div className="mobile-hero">
             {p?.home_hero_mode === 'marquee' && p.home_hero_images?.length ? (
-              <div className="hero-mosaic">
-                {p.home_hero_images
-                  .slice(0, 9)
-                  .map((src: string, i: number) => (
-                    <img src={src} alt="" key={i} />
-                  ))}
-              </div>
+              <HeroMarquee images={p.home_hero_images} />
             ) : (
               <div className="photo-wall" style={background} />
             )}
@@ -203,18 +330,25 @@ export default function BookingApp({
             </div>
           ) : (home || screen === 'login') && !data.user ? (
             <section className="business-sign-in">
-              <h1>ברוכים הבאים ל{p.display_name}</h1>
               <AuthForm slug={slug} onDone={(user) => {
                 updateUser(user);
-                if (screen === 'login') location.assign(`/${slug}`);
+                if (user?.user_type === 'admin') location.assign(`/${slug}/admin`);
+                else if (screen === 'login') location.assign(`/${slug}`);
               }} />
             </section>
+          ) : adminEntry ? (
+            <div className="empty-state" role="status">
+              <div className="loading-ring" />
+              <p>נכנסים לניהול…</p>
+            </div>
           ) : home || screen === 'login' ? (
-            <HomeSurface slug={slug} data={data} messages={messages} />
+            <HomeSurface slug={slug} data={data} actions={homeActions} version={version} />
           ) : screen === 'book' ? (
             <BookingFlow slug={slug} data={data} onUser={updateUser} />
+          ) : screen === 'profile' && !isAdmin ? (
+            <ClientProfile slug={slug} data={data} onUser={updateUser} />
           ) : screen === 'admin' ? (
-            <AdminPanel slug={slug} data={data} onUser={updateUser} />
+            <AdminPanel slug={slug} data={data} view={adminView} onUser={updateUser} />
           ) : (
             <ClientPages
               slug={slug}
@@ -224,34 +358,84 @@ export default function BookingApp({
             />
           )}
         </div>
-        {screen !== 'book' && (
-          <nav className="native-dock" aria-label="ניווט ראשי">
-            <Link
-              className="dock-create"
-              href={`/${slug}/book`}
-              aria-label="קביעת תור חדש"
-            >
-              <Plus size={25} />
-            </Link>
+        {adminDock ? (
+          <nav className="native-dock" aria-label="ניווט ניהול">
             <div className="dock-group">
               {[
-                [UserRound, 'הפרופיל שלי', 'profile'],
-                [CalendarDays, 'התורים שלי', 'appointments'],
+                [Settings, 'הגדרות', 'settings'],
+                [Wallet, 'הכנסות והוצאות', 'finance'],
+                [Clock, 'שעות פעילות', 'hours'],
+                [CalendarDays, 'יומן', 'calendar'],
                 [Home, 'בית', 'home'],
-              ].map(([Icon, label, path]: any) => (
-                <Link
-                  href={`/${slug}/${path === 'home' ? '' : path}`}
-                  aria-label={label}
-                  title={label}
-                  className={screen === path ? 'active' : ''}
-                  aria-current={screen === path ? 'page' : undefined}
-                  key={path}
-                >
-                  <Icon size={23} strokeWidth={1.8} />
-                </Link>
-              ))}
+              ].map(([Icon, label, view]: any) => {
+                const active = screen === 'admin' && adminView === view;
+                return (
+                  <Link
+                    href={`/${slug}/admin${view === 'home' ? '' : `?v=${view}`}`}
+                    aria-label={label}
+                    title={label}
+                    className={active ? 'active' : ''}
+                    aria-current={active ? 'page' : undefined}
+                    key={view}
+                  >
+                    <Icon size={22} strokeWidth={1.8} />
+                  </Link>
+                );
+              })}
             </div>
           </nav>
+        ) : showDock && (
+          <nav className="native-dock client-dock" aria-label="ניווט ראשי">
+            <span className="dock-create">
+              <Link
+                href={data?.user ? `/${slug}/book` : `/${slug}/login`}
+                aria-label="קביעת תור חדש"
+                onClick={startBooking}
+              >
+                <Plus className="dock-plus" size={22} strokeWidth={2.4} />
+              </Link>
+            </span>
+            <div className="dock-group">
+              <Link
+                href={`/${slug}/profile`}
+                aria-label="פרופיל"
+                title="פרופיל"
+                className={screen === 'profile' && !sheetOpen ? 'active' : ''}
+                aria-current={screen === 'profile' ? 'page' : undefined}
+              >
+                <UserRound size={22} strokeWidth={2} />
+              </Link>
+              <button
+                type="button"
+                aria-label="התורים שלי"
+                title="התורים שלי"
+                className={sheetOpen ? 'active' : ''}
+                aria-expanded={sheetOpen}
+                onClick={() => (sheetOpen ? closeSheet() : data?.user ? setSheetOpen(true) : router.push(`/${slug}/login`))}
+              >
+                <CalendarDays size={22} strokeWidth={2} />
+              </button>
+              <Link
+                href={`/${slug}`}
+                aria-label="בית"
+                title="בית"
+                className={home && !sheetOpen ? 'active' : ''}
+                aria-current={home ? 'page' : undefined}
+              >
+                <Home size={22} strokeWidth={2} />
+              </Link>
+            </div>
+          </nav>
+        )}
+        {data?.user && !isAdmin && (
+          <ClientAppointments
+            slug={slug}
+            data={data}
+            open={sheetOpen}
+            request={request}
+            onClose={closeSheet}
+            onChanged={() => setVersion((v) => v + 1)}
+          />
         )}
       </main>
     </div>
