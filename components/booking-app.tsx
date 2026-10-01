@@ -322,15 +322,6 @@ export default function BookingApp({ slug }: { slug: string; screen?: string }) 
               playsInline
             />
           )}
-        <div className="visual-caption">
-          <span>{p?.display_name || 'TORI · YOUR TIME'}</span>
-          <h1>
-            קצת זמן.
-            <br />
-            רק לעצמך.
-          </h1>
-          <p>היופי נמצא בפרטים הקטנים.</p>
-        </div>
       </aside>
       <main className="app-panel">
         <header>
