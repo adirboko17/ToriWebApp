@@ -1,6 +1,7 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   CalendarDays,
@@ -13,7 +14,6 @@ import {
   MapPin,
   Phone,
   Camera,
-  Sparkles,
   Plus,
   Settings,
   Wallet,
@@ -30,6 +30,26 @@ import AuthForm from './auth-form';
 import BrandImage from './brand-image';
 import BrandSplash from './brand-splash';
 import { businessLogos, headerScrim, statusBarColor } from '@/lib/branding';
+function ToriMark({ size = 22, strokeWidth = 1.8 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect width="18" height="18" x="3" y="3" rx="5" fill="none" />
+      <path d="m8 8.5 2.5 1.5L8 11.5" fill="none" />
+      <path d="M15.5 10h.01" fill="none" />
+      <path d="M8.5 14.5c2.2 1.4 4.8 1.4 7 0" fill="none" />
+    </svg>
+  );
+}
 function heroRows(images: string[]) {
   const urls = images.filter((url) => /^https?:\/\//.test(url));
   const rows: string[][] = [[], [], []];
@@ -65,19 +85,26 @@ function HeroMarquee({ images }: { images: string[] }) {
     </div>
   );
 }
-export default function BookingApp({
-  slug,
-  screen,
-}: {
-  slug: string;
-  screen: string;
-}) {
+function screenFromPath(pathname: string, slug: string) {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] !== slug) return 'home';
+  return parts[1] || 'home';
+}
+
+export default function BookingApp({ slug }: { slug: string; screen?: string }) {
+  const pathname = usePathname() || `/${slug}`;
+  const screen = screenFromPath(pathname, slug);
   const [data, setData] = useState<any>(null),
     [error, setError] = useState('');
+  const [kept, setKept] = useState<string[]>([]);
+  useEffect(() => {
+    setKept((list) => (list.includes(screen) ? list : [...list, screen]));
+  }, [screen]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
   useEffect(() => {
     let active = true;
-    setData(null);
-    setError('');
     api(slug, 'bootstrap')
       .then((r) => {
         if (active) {
@@ -96,11 +123,49 @@ export default function BookingApp({
   const p = data?.profile;
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(screen === 'appointments');
+  const [chatHint, setChatHint] = useState(false);
+  const chatRef = useRef<HTMLButtonElement>(null);
   const [request, setRequest] = useState<AppointmentsRequest | null>(null);
   const [version, setVersion] = useState(0);
   useEffect(() => {
     if (screen === 'appointments') setSheetOpen(true);
   }, [screen]);
+  const [chatBox, setChatBox] = useState<{ x: number; y: number } | null>(null);
+  function placeChatBubble() {
+    const button = chatRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    setChatBox({ x: rect.left + rect.width / 2, y: rect.top });
+  }
+  function toggleChat(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (chatHint) {
+      setChatHint(false);
+      return;
+    }
+    placeChatBubble();
+    setChatHint(true);
+  }
+  useEffect(() => {
+    if (!chatHint) return;
+    placeChatBubble();
+    const timer = window.setTimeout(() => setChatHint(false), 3200);
+    const close = (event: PointerEvent) => {
+      if (!chatRef.current?.contains(event.target as Node)) setChatHint(false);
+    };
+    const arm = window.setTimeout(() => document.addEventListener('pointerdown', close), 0);
+    const place = () => placeChatBubble();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(arm);
+      document.removeEventListener('pointerdown', close);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [chatHint]);
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
     if (screen === 'appointments') router.replace(`/${slug}`, { scroll: false });
@@ -336,21 +401,26 @@ export default function BookingApp({
             </section>
           ) : adminEntry ? (
             <BrandSplash />
-          ) : home || screen === 'login' ? (
-            <HomeSurface slug={slug} data={data} actions={homeActions} version={version} />
-          ) : screen === 'book' ? (
-            <BookingFlow slug={slug} data={data} onUser={updateUser} />
-          ) : screen === 'profile' && !isAdmin ? (
-            <ClientProfile slug={slug} data={data} onUser={updateUser} />
-          ) : screen === 'admin' ? (
-            <AdminPanel slug={slug} data={data} view={adminView} onUser={updateUser} />
           ) : (
-            <ClientPages
-              slug={slug}
-              screen={screen}
-              data={data}
-              onUser={updateUser}
-            />
+            <>
+              {(home || screen === 'login' || kept.includes('home')) && data.user && !isAdmin && (
+                <div className="kept-screen" hidden={!(home || screen === 'login')}>
+                  <HomeSurface slug={slug} data={data} actions={homeActions} version={version} />
+                </div>
+              )}
+              {(screen === 'profile' || (kept.includes('profile') && data.user)) && !isAdmin && (
+                <div className="kept-screen" hidden={screen !== 'profile'}>
+                  <ClientProfile slug={slug} data={data} onUser={updateUser} />
+                </div>
+              )}
+              {screen === 'book' ? (
+                <BookingFlow slug={slug} data={data} onUser={updateUser} />
+              ) : screen === 'admin' ? (
+                <AdminPanel slug={slug} data={data} view={adminView} onUser={updateUser} />
+              ) : !home && screen !== 'login' && screen !== 'profile' ? (
+                <ClientPages slug={slug} screen={screen} data={data} onUser={updateUser} />
+              ) : null}
+            </>
           )}
         </div>
         {adminDock ? (
@@ -358,11 +428,28 @@ export default function BookingApp({
             <div className="dock-group">
               {[
                 [Settings, 'הגדרות', 'settings'],
+                [ToriMark, 'תורי הצ׳אט AI', 'chat'],
                 [Wallet, 'הכנסות והוצאות', 'finance'],
                 [Clock, 'שעות פעילות', 'hours'],
                 [CalendarDays, 'יומן', 'calendar'],
                 [Home, 'בית', 'home'],
               ].map(([Icon, label, view]: any) => {
+                if (view === 'chat') {
+                  return (
+                    <button
+                      type="button"
+                      key={view}
+                      ref={chatRef}
+                      className="dock-chat"
+                      aria-label={label}
+                      title={label}
+                      aria-expanded={chatHint}
+                      onPointerDown={toggleChat}
+                    >
+                      <Icon size={22} strokeWidth={1.8} />
+                    </button>
+                  );
+                }
                 const active = screen === 'admin' && adminView === view;
                 return (
                   <Link
@@ -422,6 +509,14 @@ export default function BookingApp({
             </div>
           </nav>
         )}
+        {chatHint &&
+          chatBox &&
+          createPortal(
+            <span className="dock-chat-bubble" role="status" style={{ left: chatBox.x, top: chatBox.y }}>
+              זמין רק באפליקציה
+            </span>,
+            document.body,
+          )}
         {data?.user && !isAdmin && (
           <ClientAppointments
             slug={slug}

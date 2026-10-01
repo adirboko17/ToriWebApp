@@ -238,3 +238,90 @@ export async function book(p: any, user: any, body: any) {
   // Matches native insert flow; concurrent overlapping inserts still require a database exclusion constraint.
   return result(db().from('appointments').insert(payload).select().single());
 }
+
+const QUICK_SLOTS_DAYS = 7;
+const QUICK_SLOTS_LIMIT = 10;
+
+function serviceNameKey(service: any) {
+  return String(service?.name || '').trim().toLowerCase();
+}
+
+/** Nearest bookable starts for the selected treatments, earliest first. */
+export async function nearestSlots(p: any, ids: string[], user: any) {
+  if (!ids.length || ids.some((id) => !uuid(id))) throw new Error('יש לבחור טיפול');
+  const chosen = await result(
+    scoped('services', p.id).in('id', ids).eq('is_active', true),
+  );
+  if (chosen.length !== new Set(ids).size) throw new Error('הטיפול אינו זמין');
+  if (!p.allow_multi_service_booking && chosen.length > 1)
+    throw new Error('אפשר לבחור טיפול אחד');
+  const catalog = await result(scoped('services', p.id).eq('is_active', true));
+  const staff = await result(
+    db()
+      .from('users')
+      .select('id,name,image_url')
+      .eq('business_id', p.id)
+      .eq('user_type', 'admin')
+      .or('block.is.null,block.eq.false'),
+  );
+  const forBarber = (barberId: string, selected: any) =>
+    catalog.find(
+      (row: any) =>
+        row.id === selected.id && (!row.worker_id || row.worker_id === barberId),
+    ) ||
+    catalog.find(
+      (row: any) =>
+        serviceNameKey(row) === serviceNameKey(selected) &&
+        (!row.worker_id || row.worker_id === barberId),
+    );
+  const eligible = staff.filter((barber: any) =>
+    chosen.every((selected: any) => forBarber(barber.id, selected)),
+  );
+  const today = israelNow().date;
+  const mine = await result(
+    ownAppointments(p, user).select('slot_date,status').gte('slot_date', today),
+  );
+  const busyDays = new Set(
+    mine
+      .filter((row: any) => row.status !== 'cancelled' && row.status !== 'canceled')
+      .map((row: any) => row.slot_date),
+  );
+  const found: any[] = [];
+  await Promise.all(
+    eligible.map(async (barber: any) => {
+      const rows = chosen.map((selected: any) => forBarber(barber.id, selected));
+      const serviceIds = rows.map((row: any) => row.id);
+      const open = Math.min(
+        QUICK_SLOTS_DAYS,
+        Math.max(1, Number(p.booking_open_days_by_user?.[barber.id] ?? p.booking_open_days ?? 7)),
+      );
+      const serviceName = rows.map((row: any) => row.name).join(' + ');
+      for (let i = 0; i < open; i++) {
+        const date = addDays(today, i);
+        if (busyDays.has(date)) continue;
+        try {
+          const available = await availability(p, barber.id, serviceIds, date, user);
+          for (const time of available.slots)
+            found.push({
+              date,
+              time,
+              worker: barber.id,
+              worker_name: barber.name,
+              worker_image: /^https:\/\//.test(barber.image_url || '') ? barber.image_url : null,
+              services: serviceIds,
+              service_name: serviceName,
+            });
+        } catch {
+          continue;
+        }
+      }
+    }),
+  );
+  found.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.time.localeCompare(b.time) ||
+      String(a.worker).localeCompare(String(b.worker)),
+  );
+  return found.slice(0, QUICK_SLOTS_LIMIT);
+}

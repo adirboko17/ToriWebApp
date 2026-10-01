@@ -11,6 +11,7 @@ import {
   availability,
   availabilityDays,
   book,
+  nearestSlots,
   ownAppointments,
   selection,
 } from '@/lib/server/booking';
@@ -316,6 +317,21 @@ async function handle(req: Request, ctx: any) {
       action !== 'delete-account'
     )
       return json({ error: 'החשבון ממתין לאישור העסק' }, 403);
+    if (action === 'quick-slots' && !write) {
+      const audience = p.quick_slots_audience;
+      const visible =
+        audience === 'everyone' ||
+        (audience === 'registered' &&
+          !(
+            user.user_type === 'client' &&
+            p.require_client_approval &&
+            user.client_approved === false
+          ));
+      if (!visible) return json({ error: 'תורים זריזים לא זמינים' }, 403);
+      return json({
+        slots: await nearestSlots(p, String(body.services || '').split(',').filter(Boolean), user),
+      });
+    }
     if (action === 'book' && write) {
       if (body.waitlistId && user.user_type === 'admin') {
         const waiting = await result(
@@ -350,12 +366,27 @@ async function handle(req: Request, ctx: any) {
         await result(
           db()
             .from('swap_requests')
-            .select('id,appointment_id,status')
+            .select(
+              'id,appointment_id,status,preferred_dates,preferred_time_from,preferred_time_to,preferred_time_slots,original_date,original_time,original_service_name,original_barber_id',
+            )
             .eq('business_id', p.id)
             .in('requester_phone', phoneLookupVariants(user.phone))
             .in('status', ['active', 'pending_confirmation']),
         ),
       );
+    if (action === 'swap' && write && body.cancel) {
+      if (!uuid(body.id)) throw new Error('תור לא תקין');
+      await result(
+        db()
+          .from('swap_requests')
+          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+          .eq('business_id', p.id)
+          .eq('appointment_id', body.id)
+          .in('requester_phone', phoneLookupVariants(user.phone))
+          .in('status', ['active', 'pending_confirmation']),
+      );
+      return json({ ok: true });
+    }
     if (action === 'swap' && write) {
       if (p.client_swap_enabled === false)
         throw new Error('החלפת תורים אינה פעילה בעסק');
@@ -413,7 +444,13 @@ async function handle(req: Request, ctx: any) {
               preferred_dates: [...new Set(body.dates)],
               preferred_time_from: body.from,
               preferred_time_to: body.until,
-              preferred_time_slots: [],
+              preferred_time_slots: [
+                ...new Set(
+                  (Array.isArray(body.slots) ? body.slots : [])
+                    .map((id: unknown) => (id === 'noon' ? 'afternoon' : String(id)))
+                    .filter((id: string) => ['morning', 'afternoon', 'evening'].includes(id)),
+                ),
+              ],
               status: 'active',
             })
             .select()

@@ -107,6 +107,7 @@ export function publicProfile(p: any) {
     'home_fixed_message',
     'home_fixed_message_audience',
     'availability_meter_audience',
+    'quick_slots_audience',
     'booking_open_days_by_user',
     'booking_open_days',
     'map_audience',

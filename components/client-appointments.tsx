@@ -257,10 +257,33 @@ const SWAP_RANGES = [
   { id: 'evening', emoji: '🌙', label: 'ערב', from: '16:00', until: '20:00' },
 ];
 
+function preferenceDays(dates: string[]) {
+  const found = new Set<number>();
+  for (const date of dates || []) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const day = new Date(date + 'T12:00:00Z').getUTCDay();
+    if (day < 6) found.add(day);
+  }
+  return [...found].sort().map((day) => SWAP_DAYS[day]);
+}
+
+function preferenceRanges(request: any) {
+  const saved = Array.isArray(request?.preferred_time_slots) ? request.preferred_time_slots : [];
+  if (saved.length)
+    return SWAP_RANGES.filter(
+      (range) => saved.includes(range.id) || (range.id === 'noon' && saved.includes('afternoon')),
+    ).map((range) => range.label);
+  const from = String(request?.preferred_time_from || '').slice(0, 5);
+  const until = String(request?.preferred_time_to || '').slice(0, 5);
+  return SWAP_RANGES.filter((range) => range.from >= from && range.until <= until).map((range) => range.label);
+}
+
 function SwapSheet({
   slug,
   data,
   appointment,
+  request,
+  loaded,
   upcoming,
   staffOf,
   onClose,
@@ -269,6 +292,8 @@ function SwapSheet({
   slug: string;
   data: any;
   appointment: any;
+  request: any;
+  loaded: boolean;
   upcoming: any[];
   staffOf: (a: any) => any;
   onClose: () => void;
@@ -280,12 +305,16 @@ function SwapSheet({
   const [ranges, setRanges] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cancelled, setCancelled] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
     if (!appointment) return;
     setPicked(appointment);
     setDays([]);
     setRanges([]);
     setError('');
+    setCancelled(false);
+    setDismissed(false);
   }, [appointment]);
   const minHours = Math.min(168, Math.max(0, Number(p.client_swap_min_hours ?? 24)));
   const tomorrow = addDays(israelNow().date, 1);
@@ -312,6 +341,7 @@ function SwapSheet({
         dates,
         from: chosen[0].from,
         until: chosen[chosen.length - 1].until,
+        slots: ranges,
       });
       onSent();
       onClose();
@@ -322,9 +352,99 @@ function SwapSheet({
     }
   };
   const disabled = p.client_swap_enabled === false;
+  const searching = Boolean(request) && !dismissed;
+  const dayLabels = searching ? preferenceDays(request.preferred_dates || []) : [];
+  const rangeLabels = searching ? preferenceRanges(request) : [];
+  const cancelRequest = async () => {
+    if (!a || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(slug, 'swap', { id: a.id, cancel: true });
+      setDismissed(true);
+      setCancelled(true);
+      onSent();
+    } catch (e: any) {
+      setError(e.message || 'הביטול נכשל, נסה שוב');
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <BottomSheet open={Boolean(appointment)} onClose={onClose} size="auto" className="cs-sheet">
+    <BottomSheet open={Boolean(appointment)} onClose={onClose} size="auto" locked={busy} className="cs-sheet">
       <div className="cs-body">
+        {appointment && !loaded ? (
+          <div className="cs-wait" role="status">
+            <span className="cc-spinner" />
+          </div>
+        ) : cancelled ? (
+          <div className="cs-status">
+            <div className="cs-status-hero">
+              <span className="cs-status-icon is-muted">
+                <X size={36} />
+              </span>
+              <h2>הבקשה בוטלה</h2>
+              <p>אפשר לבחור ימים ושעות חדשים ולשלוח בקשה ללקוחות אחרים.</p>
+            </div>
+            <button type="button" className="cs-send" onClick={() => setCancelled(false)}>
+              המשך לחפש תור אחר
+            </button>
+            <button type="button" className="cs-quiet" onClick={onClose}>
+              סגור
+            </button>
+          </div>
+        ) : searching && a ? (
+          <div className="cs-status">
+            <div className="cs-status-hero">
+              <span className="cs-status-icon">
+                <ArrowLeftRight size={26} />
+              </span>
+              <span className="cs-status-pill">
+                {request.status === 'pending_confirmation' ? 'ממתינים לאישור שלך' : 'מחפשים לך תור'}
+                {request.status === 'pending_confirmation' ? null : <i className="ch-ring" aria-hidden />}
+              </span>
+              <h2>{request.status === 'pending_confirmation' ? 'יש הצעה להחלפה' : 'הבקשה נשלחה'}</h2>
+              <p>
+                {request.status === 'pending_confirmation'
+                  ? 'בדקי את התור המוצע ואשרי רק אם הוא מתאים לך. עד האישור התורים לא מתחלפים.'
+                  : 'נודיע לך ברגע שמישהו יציע החלפה - ורק אחרי שתאשרי זה יתחלף'}
+              </p>
+            </div>
+            <div className="cs-status-panel">
+              <AppointmentCard a={a} staff={staffOf(a)} label="התור שלך" header={hebrewDay(a.slot_date)} />
+              {(dayLabels.length > 0 || rangeLabels.length > 0) && request.status !== 'pending_confirmation' && (
+                <div className="cs-prefs">
+                  <span>במקום התור הזה</span>
+                  <div>
+                    {dayLabels.length > 0 && (
+                      <span className="cs-pref">
+                        <CalendarDays size={14} />
+                        {dayLabels.map((label) => (
+                          <b key={label}>{label}</b>
+                        ))}
+                      </span>
+                    )}
+                    {dayLabels.length > 0 && rangeLabels.length > 0 && <i className="cs-pref-dot" />}
+                    {rangeLabels.length > 0 && (
+                      <span className="cs-pref">
+                        <Clock size={14} />
+                        {rangeLabels.map((label) => (
+                          <b key={label}>{label}</b>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {error && <p className="cs-hint is-error">{error}</p>}
+            <button type="button" className="cs-send" disabled={busy} onClick={cancelRequest}>
+              {busy ? <span className="cc-spinner is-small" /> : null}
+              בטל בקשה
+            </button>
+          </div>
+        ) : (
+          <>
         <div className="cs-head">
           <h2>החלפת תור</h2>
           <p>{disabled ? 'החלפת תורים אינה זמינה כרגע' : 'מציעים את התור שלך ומקבלים תור של מישהו אחר'}</p>
@@ -409,6 +529,8 @@ function SwapSheet({
             </button>
           </>
         )}
+        </>
+        )}
       </div>
     </BottomSheet>
   );
@@ -432,6 +554,7 @@ export default function ClientAppointments({
   const p = data.profile;
   const [rows, setRows] = useState<any[] | null>(null);
   const [swaps, setSwaps] = useState<any[]>([]);
+  const [swapsLoaded, setSwapsLoaded] = useState(false);
   const [past, setPast] = useState(false);
   const [cancelling, setCancelling] = useState<any>(null);
   const [late, setLate] = useState<any>(null);
@@ -442,7 +565,8 @@ export default function ClientAppointments({
       .catch(() => setRows([]));
     api(slug, 'swaps')
       .then(setSwaps)
-      .catch(() => setSwaps([]));
+      .catch(() => setSwaps([]))
+      .finally(() => setSwapsLoaded(true));
   }, [slug]);
   useEffect(() => {
     if (open) {
@@ -462,7 +586,8 @@ export default function ClientAppointments({
     if (request.type === 'cancel') startCancel(request.appointment);
     else {
       setSwapping(request.appointment);
-      if (!rows) load();
+      setSwapsLoaded(false);
+      load();
     }
   }, [request?.n]);
   const staffOf = useCallback(
@@ -603,6 +728,8 @@ export default function ClientAppointments({
         slug={slug}
         data={data}
         appointment={swapping}
+        request={swapping ? (swaps.find((s) => s.appointment_id === swapping.id) ?? null) : null}
+        loaded={swapsLoaded}
         upcoming={upcoming}
         staffOf={staffOf}
         onClose={() => setSwapping(null)}

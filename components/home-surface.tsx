@@ -10,16 +10,19 @@ import {
   MapPin,
   Megaphone,
   Moon,
+  ChevronLeft,
   Plus,
   Sun,
   User,
   X,
+  Zap,
 } from 'lucide-react';
 import { ProductCarousel, StoryCarousel } from './catalog-carousel';
 import { GalleryStory, ProductDetail } from './client-viewers';
 import { FacebookIcon, InstagramIcon, TikTokIcon, WhatsAppIcon, whatsappLink } from './brand-icons';
 import BrandImage from './brand-image';
 import { api } from '@/lib/client';
+import QuickSlots from './quick-slots';
 import { businessLogos } from '@/lib/branding';
 import { israelNow, addDays } from '@/lib/availability';
 import { isUpcoming, cancelLocked, hebrewDay } from '@/lib/client-appointments';
@@ -272,7 +275,10 @@ export default function HomeSurface({
   version?: number;
 }) {
   const { profile: p, user, staff } = data;
+  const services: any[] = data.services || [];
   const [loading, setLoading] = useState(Boolean(user));
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [tick, setTick] = useState(0);
   const [next, setNext] = useState<any>(null);
   const [swaps, setSwaps] = useState<any[]>([]);
   const [waiting, setWaiting] = useState<any[]>([]);
@@ -327,7 +333,7 @@ export default function HomeSurface({
     return () => {
       active = false;
     };
-  }, [slug, user?.id, version]);
+  }, [slug, user?.id, version, tick]);
 
   const barber = next && staff.find((s: any) => s.id === next.barber_id);
   const nextSwap = next && swaps.find((s) => s.appointment_id === next.id);
@@ -339,6 +345,22 @@ export default function HomeSurface({
   const phone = p.phone || '';
   const logos = businessLogos(p, slug);
   const bookLink = user ? `/${slug}/book` : `/${slug}/login`;
+  const showQuickSlots = allowed(p.quick_slots_audience, 'off');
+  const openQuickSlots = () => {
+    if (!user) {
+      location.assign(`/${slug}/login`);
+      return;
+    }
+    if (blocked) {
+      alert('החשבון חסום\nהחשבון שלך חסום. לא ניתן לקבוע תורים.');
+      return;
+    }
+    if (awaiting) {
+      alert('ממתין לאישור\nההרשמה שלך ממתינה לאישור העסק. עדיין לא ניתן לקבוע תורים.');
+      return;
+    }
+    setQuickOpen(true);
+  };
   const socials = [
     p.instagram_url && { href: p.instagram_url, label: 'אינסטגרם', Icon: InstagramIcon, color: '#E4405F' },
     p.facebook_url && { href: p.facebook_url, label: 'פייסבוק', Icon: FacebookIcon, color: '#1877F2' },
@@ -359,17 +381,26 @@ export default function HomeSurface({
         ) : next ? (
           <>
             <article className="ch-next">
+              <div className="ch-card-head">
+                <button type="button" className="ch-next-date ch-next-open" onClick={actions.openAppointments}>
+                  {new Date(next.slot_date + 'T12:00:00Z').toLocaleDateString('he-IL', {
+                    day: 'numeric',
+                    month: 'long',
+                    timeZone: 'UTC',
+                  })}
+                </button>
+                <span className="ch-next-tools">
+                  <button type="button" className="ch-next-label ch-next-open" onClick={actions.openAppointments}>
+                    התור הבא שלך
+                  </button>
+                  {showQuickSlots && (
+                    <button type="button" className="ch-quick-dot" aria-label="תורים זריזים" onClick={openQuickSlots}>
+                      <Zap size={16} />
+                    </button>
+                  )}
+                </span>
+              </div>
               <button type="button" className="ch-next-tap" onClick={actions.openAppointments} aria-label="התורים שלי">
-                <div className="ch-card-head">
-                  <span className="ch-next-date">
-                    {new Date(next.slot_date + 'T12:00:00Z').toLocaleDateString('he-IL', {
-                      day: 'numeric',
-                      month: 'long',
-                      timeZone: 'UTC',
-                    })}
-                  </span>
-                  <span className="ch-next-label">התור הבא שלך</span>
-                </div>
                 <div className="ch-next-body">
                   <span className="ch-avatar">
                     <BrandImage
@@ -437,32 +468,41 @@ export default function HomeSurface({
             )}
           </>
         ) : (
-          <Link
-            className={`ch-book${blocked || awaiting ? ' is-disabled' : ''}`}
-            href={bookLink}
-            onClick={(e) => {
-              if (!blocked && !awaiting) return;
-              e.preventDefault();
-              alert(
-                blocked
-                  ? 'החשבון חסום\nהחשבון שלך חסום. לא ניתן לקבוע תורים.'
-                  : 'ממתין לאישור\nההרשמה שלך ממתינה לאישור העסק. עדיין לא ניתן לקבוע תורים.',
-              );
-            }}
-          >
-            <span className="ch-lava" aria-hidden>
-              <i />
-              <i />
-              <i />
-            </span>
-            <span className="ch-book-copy">
-              <strong>{user?.name ? `שלום ${String(user.name).trim().split(/\s+/)[0]}` : 'שלום'}</strong>
-              <small>לחץ כאן כדי לקבוע תור חדש</small>
-            </span>
-            <span className="ch-book-plus">
-              <Plus size={26} strokeWidth={2.4} />
-            </span>
-          </Link>
+          <div className={`ch-book-host${blocked || awaiting ? ' is-disabled' : ''}`}>
+            <Link
+              className="ch-book"
+              href={bookLink}
+              onClick={(e) => {
+                if (!blocked && !awaiting) return;
+                e.preventDefault();
+                alert(
+                  blocked
+                    ? 'החשבון חסום\nהחשבון שלך חסום. לא ניתן לקבוע תורים.'
+                    : 'ממתין לאישור\nההרשמה שלך ממתינה לאישור העסק. עדיין לא ניתן לקבוע תורים.',
+                );
+              }}
+            >
+              <span className="ch-lava" aria-hidden>
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="ch-book-copy">
+                <strong>{user?.name ? `שלום ${String(user.name).trim().split(/\s+/)[0]}` : 'שלום'}</strong>
+                <small>לחץ כאן כדי לקבוע תור חדש</small>
+              </span>
+              <span className="ch-book-plus">
+                <Plus size={26} strokeWidth={2.4} />
+              </span>
+            </Link>
+            {showQuickSlots && (
+              <button type="button" className="ch-quick-tab" onClick={openQuickSlots}>
+                <Zap size={14} />
+                <span>10 התורים הכי קרובים</span>
+                <ChevronLeft size={14} />
+              </button>
+            )}
+          </div>
         )}
 
         {waiting.length > 0 && (
@@ -589,6 +629,14 @@ export default function HomeSurface({
         <GalleryStory designs={designs} people={staff} initialId={storyId} onClose={() => setStoryId(null)} />
       )}
       <ProductDetail product={product} onClose={() => setProduct(null)} />
+      <QuickSlots
+        slug={slug}
+        services={services}
+        multi={Boolean(p.allow_multi_service_booking)}
+        open={quickOpen}
+        onClose={() => setQuickOpen(false)}
+        onBooked={() => setTick((n) => n + 1)}
+      />
     </div>
   );
 }

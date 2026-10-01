@@ -294,6 +294,10 @@ export interface BusinessProfile {
    * Legacy flag — prefer `availability_meter_audience`.
    */
   availability_meter_approved_only?: boolean;
+  /**
+   * Who sees the home quick-slots shortcut: `off` | `everyone` | `registered`.
+   */
+  quick_slots_audience?: 'off' | 'everyone' | 'registered' | string | null;
   primary_color?: string; // Hex color code for primary UI color
   // Number of days forward to open booking window; defaults to 7 on server (legacy - now use booking_open_days_by_user)
   booking_open_days?: number;

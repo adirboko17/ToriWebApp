@@ -129,7 +129,7 @@ export default function ClientProfile({
   const file = useRef<HTMLInputElement>(null);
   const language = LANGUAGES.some((l) => l.code === user?.language) ? user.language : 'he';
   useEffect(() => {
-    if (!user) location.replace(`/${slug}/login`);
+    if (!user) location.replace(`/${slug}`);
   }, [user, slug]);
   if (!user) return null;
 
@@ -181,7 +181,6 @@ export default function ClientProfile({
     setDeleting(true);
     try {
       await api(slug, 'delete-account', {});
-      onUser(null);
       location.replace(`/${slug}/login`);
     } catch {
       alert('נכשל במחיקת החשבון');
@@ -193,8 +192,7 @@ export default function ClientProfile({
     try {
       await api(slug, 'logout', {});
     } finally {
-      onUser(null);
-      location.assign(`/${slug}`);
+      location.replace(`/${slug}`);
     }
   };
 
