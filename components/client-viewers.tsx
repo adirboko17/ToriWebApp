@@ -15,8 +15,9 @@ function money(price: number) {
   const whole = Math.abs((price * 100) % 100) < 0.5;
   return `₪${whole ? price.toFixed(0) : price.toFixed(2)}`;
 }
-function categories(item: any) {
-  return Array.isArray(item?.categories) ? item.categories.map(String).filter(Boolean).slice(0, 4) : [];
+function categories(item: any): string[] {
+  if (!Array.isArray(item?.categories)) return [];
+  return item.categories.map((value: unknown) => String(value)).filter(Boolean).slice(0, 4);
 }
 
 export function GalleryStory({
