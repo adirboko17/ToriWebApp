@@ -21,12 +21,25 @@
   width: min(220px, 68vw);
   height: auto;
 }
+.card h1,
 .card p {
   margin: 0;
   font-size: 20px;
   font-weight: 500;
   line-height: 1.45;
   color: #1c1c1e;
+}
+.card h1 {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.note {
+  max-width: 18rem;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #6b6b70;
 }
 .card a {
   display: inline-flex;
