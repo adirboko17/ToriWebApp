@@ -21,7 +21,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const p = await tenant(slug);
   if (!p) return { title: 'העסק לא נמצא' };
-  const profile = publicProfile(p);
+  const profile = await publicProfile(p);
   const image = profile.home_logo_url || profile.icon_url;
   return {
     title: `${p.display_name || 'Tori'} | קביעת תורים`,

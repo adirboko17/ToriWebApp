@@ -68,6 +68,39 @@ export async function tenant(slug: string) {
   );
 }
 const brandingName = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+let brandingFolders: { at: number; names: Map<string, string> } | null = null;
+async function brandingFolderName(clientName: string) {
+  const now = Date.now();
+  if (!brandingFolders || now - brandingFolders.at > 5 * 60 * 1000) {
+    const base = setting('SUPABASE_URL').replace(/\/$/, '');
+    const key = setting('SUPABASE_ANON_KEY');
+    const names = new Map<string, string>();
+    if (/^https:\/\//.test(base) && key) {
+      try {
+        const res = await fetch(`${base}/storage/v1/object/list/app_design`, {
+          method: 'POST',
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefix: 'branding/', limit: 200 }),
+        });
+        const rows = await res.json();
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (typeof row?.name === 'string' && brandingName.test(row.name))
+              names.set(row.name.toLowerCase(), row.name);
+          }
+        }
+      } catch {
+        /* keep the stored spelling when the folder list is unavailable */
+      }
+    }
+    if (names.size) brandingFolders = { at: now, names };
+  }
+  return brandingFolders?.names.get(clientName.toLowerCase()) || clientName;
+}
 export function brandingAssetUrl(
   clientName: unknown,
   file: 'logo.png' | 'icon.png',
@@ -77,7 +110,7 @@ export function brandingAssetUrl(
   if (!/^https:\/\//.test(base)) return null;
   return `${base}/storage/v1/object/public/app_design/branding/${clientName}/${file}`;
 }
-export function publicProfile(p: any) {
+export async function publicProfile(p: any) {
   const fields = [
     'id',
     'branding_client_name',
@@ -116,9 +149,12 @@ export function publicProfile(p: any) {
     'home_header_title_font_size',
   ];
   const profile = Object.fromEntries(fields.map((k) => [k, p[k]]));
+  const folder =
+    typeof p.branding_client_name === 'string' && brandingName.test(p.branding_client_name)
+      ? await brandingFolderName(p.branding_client_name)
+      : p.branding_client_name;
   if (!profile.home_logo_url)
-    profile.home_logo_url = brandingAssetUrl(p.branding_client_name, 'logo.png');
-  if (!profile.icon_url)
-    profile.icon_url = brandingAssetUrl(p.branding_client_name, 'icon.png');
+    profile.home_logo_url = brandingAssetUrl(folder, 'logo.png');
+  if (!profile.icon_url) profile.icon_url = brandingAssetUrl(folder, 'icon.png');
   return profile;
 }

@@ -144,7 +144,7 @@ async function handle(req: Request, ctx: any) {
             .order('name'),
         ),
       ]);
-      const profile = publicProfile(p);
+      const profile = await publicProfile(p);
       if (user) profile.manager_phone = staff.find((s: any) => s.phone)?.phone || null;
       for (const s of staff) delete s.phone;
       if (

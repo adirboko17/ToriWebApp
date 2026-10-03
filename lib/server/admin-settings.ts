@@ -164,7 +164,7 @@ export async function readAdminSettings(profile: any, user: any, slug: string) {
     home_header_show_logo: profile.home_header_show_logo !== false,
     home_header_text_without_logo: profile.home_header_text_without_logo || '',
     home_logo_url: /^https?:\/\//.test(profile.home_logo_url || '') ? profile.home_logo_url : '',
-    home_logos: businessLogos(publicProfile(profile), slug),
+    home_logos: businessLogos(await publicProfile(profile), slug),
     home_header_logo_height: Number(profile.home_header_logo_height) || 52,
     home_header_logo_color_mode:
       profile.home_header_logo_color_mode === 'original' ? 'original' : 'white',
