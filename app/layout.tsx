@@ -3,7 +3,6 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Tori | קביעת תורים',
   description: 'הזמן שלך לעצמך. בחירת טיפול וקביעת תור בקלות.',
-  icons: { icon: '/favicon.svg' },
 };
 export const viewport = {
   width: 'device-width',

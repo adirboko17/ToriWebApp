@@ -4,6 +4,7 @@ import styles from './brand-gate.module.css';
 export const metadata: Metadata = {
   title: 'Tori',
   description: 'אפליקציה אישית וממותגת לקביעת תורים.',
+  icons: { icon: [{ url: '/icon.png', type: 'image/png' }] },
 };
 
 export default function Page() {
