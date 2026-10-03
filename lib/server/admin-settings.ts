@@ -121,6 +121,11 @@ export async function readAdminSettings(profile: any, user: any, slug: string) {
       .filter((row: any) => String(row.name || '').trim())
       .slice(0, 3)
       .map((row: any) => ({ name: row.name, image_url: row.image_url || '' })),
+    meter_staff: bookable.map((row: any) => ({
+      id: row.id,
+      name: row.name || '',
+      image_url: row.image_url || '',
+    })),
     me: {
       id: user.id,
       has_code: hasCode(me?.password_hash),

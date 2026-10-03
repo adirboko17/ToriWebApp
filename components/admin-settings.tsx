@@ -14,6 +14,8 @@ import {
   CircleHelp,
   ClipboardList,
   Clock,
+  Eye,
+  EyeOff,
   Gauge,
   Globe,
   Layers,
@@ -44,6 +46,8 @@ import AdminRecurringWizard from './admin-recurring-wizard';
 import { EmergencyPasscode } from './admin-clients';
 import DesignTab, { SaveFn } from './settings-design';
 import { BranchesTab, EmployeesTab, ServicesTab, normalizePhone } from './settings-catalog';
+import QuickSlots from './quick-slots';
+import { FixedMessageSheet, HomeMapCard, WeekMeter } from './home-surface';
 import {
   AlertState,
   AudienceSheet,
@@ -825,6 +829,8 @@ export default function AdminSettings({ slug }: { slug: string }) {
   const [pending, setPending] = useState<'cancel' | 'self' | null>(null);
   const [audience, setAudience] = useState<AudienceKey | null>(null);
   const [panel, setPanel] = useState<'' | 'message' | 'language' | 'delete' | 'admin' | 'name' | 'address' | 'recurring' | 'logout' | 'cancelApp' | 'cancelDone'>('');
+  const [preview, setPreview] = useState<'' | 'message' | 'meter' | 'quick' | 'map'>('');
+  const [previewServices, setPreviewServices] = useState<any[] | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelRequested, setCancelRequested] = useState(false);
@@ -997,6 +1003,7 @@ export default function AdminSettings({ slug }: { slug: string }) {
               subtitle={AUDIENCE_SHORT[s.home_fixed_message_audience]}
               disabled={busy}
               onClick={() => setAudience('home_fixed_message_audience')}
+              onPreview={s.home_fixed_message?.trim() ? () => setPreview('message') : undefined}
             >
               {s.home_fixed_message_audience !== 'off' && (
                 <div className="st-msg-block">
@@ -1021,6 +1028,7 @@ export default function AdminSettings({ slug }: { slug: string }) {
               subtitle={AUDIENCE_SHORT[s.availability_meter_audience]}
               disabled={busy}
               onClick={() => setAudience('availability_meter_audience')}
+              onPreview={() => setPreview('meter')}
             />
             <Row
               icon={<Zap size={20} />}
@@ -1028,6 +1036,13 @@ export default function AdminSettings({ slug }: { slug: string }) {
               subtitle={AUDIENCE_SHORT[s.quick_slots_audience]}
               disabled={busy}
               onClick={() => setAudience('quick_slots_audience')}
+              onPreview={() => {
+                setPreview('quick');
+                if (previewServices) return;
+                api(slug, 'admin-settings-list', undefined, { part: 'services' })
+                  .then((r) => setPreviewServices(r.services || []))
+                  .catch(() => setPreviewServices([]));
+              }}
             />
             <Row
               icon={<ClipboardList size={20} />}
@@ -1228,6 +1243,7 @@ export default function AdminSettings({ slug }: { slug: string }) {
         subtitle={AUDIENCE_SHORT[s.map_audience]}
         disabled={busy}
         onClick={() => setAudience('map_audience')}
+        onPreview={() => setPreview('map')}
       />
       <SocialRow
         icon={INSTAGRAM}
@@ -1422,6 +1438,96 @@ export default function AdminSettings({ slug }: { slug: string }) {
         buttons={[{ label: 'הבנתי', kind: 'primary', onClick: () => setPanel('') }]}
       />
       <IosAlert alert={alert} onClose={() => setAlert(null)} />
+      {preview === 'message' && s?.home_fixed_message?.trim() && (
+        <FixedMessageSheet text={s.home_fixed_message} onClose={() => setPreview('')} />
+      )}
+      {preview === 'meter' && (
+      <ClientPreview
+        open
+        title="מד זמינות תורים"
+        hidden={s?.availability_meter_audience === 'off'}
+        onClose={() => setPreview('')}
+      >
+        {(s?.meter_staff || []).length ? (
+          <WeekMeter slug={slug} staff={s.meter_staff} disabled bookHref={() => '#'} />
+        ) : (
+          <p className="st-client-preview-empty">אין אנשי צוות להצגה</p>
+        )}
+      </ClientPreview>
+      )}
+      {preview === 'map' && (
+      <ClientPreview
+        open
+        title="מפת העסק"
+        hidden={s?.map_audience === 'off'}
+        onClose={() => setPreview('')}
+      >
+        {!s?.address?.trim() && (
+          <p className="st-client-preview-warn">
+            עדיין לא הוגדרה כתובת לעסק, ולכן המפה מציגה מיקום ברירת מחדל. אפשר להוסיף כתובת בשורה «כתובת העסק».
+          </p>
+        )}
+        <HomeMapCard address={s?.address || ''} name={s?.display_name || ''} logos={s?.home_logos || []} />
+      </ClientPreview>
+      )}
+      {preview === 'quick' && !previewServices && (
+        <ClientPreview open title="תורים זריזים" onClose={() => setPreview('')}>
+          <p className="st-client-preview-empty">טוען תורים זריזים…</p>
+        </ClientPreview>
+      )}
+      {preview === 'quick' && previewServices && (
+        <QuickSlots
+          slug={slug}
+          services={previewServices}
+          multi={Boolean(s?.allow_multi_service_booking)}
+          open
+          preview
+          onClose={() => setPreview('')}
+          onBooked={() => setPreview('')}
+        />
+      )}
     </div>
+  );
+}
+
+function ClientPreview({
+  open,
+  title,
+  hidden,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  hidden?: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return createPortal(
+    <div className="st-client-preview" role="dialog" aria-modal="true" aria-label={title}>
+      <header>
+        <div>
+          <span>
+            <Eye size={14} />
+            כך זה יופיע אצל הלקוחות
+          </span>
+          <button type="button" aria-label="סגירה" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+        <h2>{title}</h2>
+      </header>
+      <div className="st-client-preview-sheet">
+        {hidden && (
+          <p className="st-client-preview-hidden">
+            <EyeOff size={18} />
+            כרגע מוסתר מהלקוחות. כך זה ייראה אחרי שתפעילו.
+          </p>
+        )}
+        {children}
+      </div>
+    </div>,
+    document.body,
   );
 }

@@ -40,26 +40,20 @@ const periods: Record<string, { label: string; Icon: any; color?: string }> = {
   any: { label: 'כל זמן', Icon: Clock },
 };
 
-function FixedMessage({ text }: { text: string }) {
-  const key = `tori-fixed-message:${text}`;
-  const [open, setOpen] = useState(false);
+export function FixedMessageSheet({ text, onClose }: { text: string; onClose: () => void }) {
   const [shift, setShift] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const drag = useRef<{ y: number; t: number; moved: boolean } | null>(null);
   const pulled = useRef(false);
   const leavingRef = useRef(false);
-  useEffect(() => {
-    if (!sessionStorage.getItem(key)) setOpen(true);
-  }, [key]);
   const close = () => {
     if (leavingRef.current) return;
     leavingRef.current = true;
-    sessionStorage.setItem(key, '1');
     setLeaving(true);
     setDragging(false);
     setShift(-Math.max(480, window.innerHeight));
-    window.setTimeout(() => setOpen(false), 260);
+    window.setTimeout(onClose, 260);
   };
   const onPointerDown = (e: React.PointerEvent) => {
     if (leaving) return;
@@ -91,7 +85,6 @@ function FixedMessage({ text }: { text: string }) {
       setDragging(false);
     }
   };
-  if (!open) return null;
   const lines = text.trim().split('\n');
   const first = lines.findIndex((l) => l.trim());
   const rich = (line: string) =>
@@ -156,7 +149,25 @@ function FixedMessage({ text }: { text: string }) {
   );
 }
 
-function WeekMeter({
+function FixedMessage({ text }: { text: string }) {
+  const key = `tori-fixed-message:${text}`;
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!sessionStorage.getItem(key)) setOpen(true);
+  }, [key]);
+  if (!open) return null;
+  return (
+    <FixedMessageSheet
+      text={text}
+      onClose={() => {
+        sessionStorage.setItem(key, '1');
+        setOpen(false);
+      }}
+    />
+  );
+}
+
+export function WeekMeter({
   slug,
   staff,
   disabled,
@@ -260,6 +271,45 @@ function WeekMeter({
         </span>
       </div>
     </section>
+  );
+}
+
+export function HomeMapCard({
+  address,
+  name,
+  logos,
+}: {
+  address: string;
+  name: string;
+  logos: string[];
+}) {
+  const place = address || 'Tel Aviv-Yafo, Israel';
+  return (
+    <a
+      className="ch-map"
+      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <iframe
+        title="מפה"
+        tabIndex={-1}
+        loading="lazy"
+        src={`https://maps.google.com/maps?q=${encodeURIComponent(place)}&z=15&output=embed`}
+      />
+      <span className="ch-map-wash" />
+      <span className="ch-map-pin" aria-hidden>
+        <span className="ch-map-balloon">
+          {logos.length ? <BrandImage sources={logos} alt="" fallback={<MapPin size={24} />} /> : <MapPin size={24} />}
+        </span>
+        <i className="ch-map-tip" />
+        <i className="ch-map-ground" />
+      </span>
+      <span className="ch-map-bar">
+        <strong>{name}</strong>
+        <small>{place}</small>
+      </span>
+    </a>
   );
 }
 
@@ -570,35 +620,7 @@ export default function HomeSurface({
 
       {allowed(p.map_audience, 'everyone') && (
         <div className="ch-section">
-          <a
-            className="ch-map"
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || 'Tel Aviv-Yafo, Israel')}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <iframe
-              title="מפה"
-              tabIndex={-1}
-              loading="lazy"
-              src={`https://maps.google.com/maps?q=${encodeURIComponent(address || 'Tel Aviv-Yafo, Israel')}&z=15&output=embed`}
-            />
-            <span className="ch-map-wash" />
-            <span className="ch-map-pin" aria-hidden>
-              <span className="ch-map-balloon">
-                {(p.icon_url || logos.length) ? (
-                  <BrandImage sources={[p.icon_url, ...logos]} alt="" fallback={<MapPin size={24} />} />
-                ) : (
-                  <MapPin size={24} />
-                )}
-              </span>
-              <i className="ch-map-tip" />
-              <i className="ch-map-ground" />
-            </span>
-            <span className="ch-map-bar">
-              <strong>{p.display_name}</strong>
-              <small>{address || 'Tel Aviv-Yafo, Israel'}</small>
-            </span>
-          </a>
+          <HomeMapCard address={address} name={p.display_name} logos={[p.icon_url, ...logos].filter(Boolean)} />
         </div>
       )}
 

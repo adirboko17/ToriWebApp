@@ -34,6 +34,7 @@ export default function QuickSlots({
   open,
   onClose,
   onBooked,
+  preview = false,
 }: {
   slug: string;
   services: any[];
@@ -41,6 +42,7 @@ export default function QuickSlots({
   open: boolean;
   onClose: () => void;
   onBooked: () => void;
+  preview?: boolean;
 }) {
   const list = useMemo(() => uniqueServices(services), [services]);
   const [step, setStep] = useState<'service' | 'time' | 'done'>('service');
@@ -91,6 +93,10 @@ export default function QuickSlots({
 
   async function confirm() {
     if (!pending || busy) return;
+    if (preview) {
+      onClose();
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -144,6 +150,7 @@ export default function QuickSlots({
         ) : step === 'service' ? (
           <>
             <div className="qs-hero">
+              {preview && <p className="qs-preview-note">תצוגה מקדימה · התור לא יישמר</p>}
               <span>
                 <Zap size={13} strokeWidth={2.4} />
                 {LIMIT} פנויים
@@ -261,7 +268,7 @@ export default function QuickSlots({
             )}
             {pending && (
               <button type="button" className="qs-confirm" disabled={busy} onClick={() => void confirm()}>
-                {busy ? 'רק רגע…' : 'אישור התור'}
+                {busy ? 'רק רגע…' : preview ? 'סגירת תצוגה' : 'אישור התור'}
               </button>
             )}
           </>

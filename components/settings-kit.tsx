@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, CircleHelp, CircleUserRound, EyeOff, Plus, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, CircleHelp, CircleUserRound, Eye, EyeOff, Plus, Users } from 'lucide-react';
 import BottomSheet from './bottom-sheet';
 
 export type AlertButton = { label: string; destructive?: boolean; onClick?: () => void };
@@ -77,6 +77,7 @@ export function Row({
   toggle,
   trailing,
   last,
+  onPreview,
   children,
 }: {
   icon: React.ReactNode;
@@ -91,6 +92,7 @@ export function Row({
   toggle?: { checked: boolean; onChange: (value: boolean) => void; disabled?: boolean };
   trailing?: React.ReactNode;
   last?: boolean;
+  onPreview?: () => void;
   children?: React.ReactNode;
 }) {
   const plate = (
@@ -104,6 +106,11 @@ export function Row({
       {subtitle ? <small>{subtitle}</small> : null}
     </span>
   );
+  const eye = onPreview ? (
+    <button type="button" className="st-eye" aria-label="תצוגה מקדימה" onClick={onPreview}>
+      <Eye size={17} strokeWidth={1.9} />
+    </button>
+  ) : null;
   const trail = toggle ? (
     <Switch
       checked={toggle.checked}
@@ -129,6 +136,17 @@ export function Row({
             copy
           )}
           {trail}
+        </div>
+      ) : onPreview ? (
+        <div className={`st-row${disabled ? ' is-disabled' : ''}`}>
+          <button type="button" className="st-row-hit" disabled={disabled} onClick={onClick}>
+            {plate}
+            {copy}
+          </button>
+          {eye}
+          <button type="button" className="st-chev-btn" disabled={disabled} onClick={onClick} tabIndex={-1} aria-hidden>
+            <ChevronLeft size={20} className="st-chev" />
+          </button>
         </div>
       ) : (
         <button type="button" className="st-row" disabled={disabled} onClick={onClick}>
