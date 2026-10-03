@@ -4502,6 +4502,7 @@ body .hours-day-summary > header {
   color: #8e8e93;
 }
 .cal-strip b {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 16px;
@@ -4510,6 +4511,22 @@ body .hours-day-summary > header {
   font-size: 18px;
   font-weight: 400;
   letter-spacing: -0.3px;
+}
+.cal-override {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--on-light, #1c1c1e);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.is-today .cal-override,
+.cal-strip .is-selected .cal-override,
+.month-cell.is-selected .cal-override {
+  border-color: #fff;
 }
 .cal-strip i {
   width: 4px;
@@ -4824,6 +4841,7 @@ body .hours-day-summary > header {
   font-weight: 800;
 }
 .week-head b {
+  position: relative;
   min-width: 32px;
   height: 32px;
   padding: 0 4px;
@@ -5047,6 +5065,7 @@ body .hours-day-summary > header {
   color: #1c1c1e;
 }
 .month-cell b {
+  position: relative;
   width: 36px;
   height: 36px;
   border-radius: 18px;
@@ -5588,6 +5607,10 @@ body .hours-day-summary > header {
 .add-icon.is-note {
   background: #f1f3f4;
   color: #5f6368;
+}
+.add-icon.is-hours {
+  background: #fff7e8;
+  color: #b7791f;
 }
 .add-icon.is-block {
   background: #fef2f2;

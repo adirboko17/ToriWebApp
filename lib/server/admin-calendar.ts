@@ -116,7 +116,7 @@ export async function calendarRange(businessId: string, userId: string, query: a
 
 export async function calendarMonths(businessId: string, userId: string, query: any) {
   const { from, to } = range(query.from, query.to, 800);
-  const [appointments, constraints, notes] = await Promise.all([
+  const [appointments, constraints, notes, overrides] = await Promise.all([
     pages((a, b) =>
       ownAppointments(businessId, userId, 'id,business_id,slot_date,slot_time,duration_minutes,client_phone,barber_id')
         .gte('slot_date', from)
@@ -135,6 +135,16 @@ export async function calendarMonths(businessId: string, userId: string, query: 
         .range(a, b),
     ),
     reminders(businessId, userId, from, to, 'event_date'),
+    pages((a, b) =>
+      db()
+        .from('business_hours_overrides')
+        .select('date')
+        .eq('business_id', businessId)
+        .eq('user_id', userId)
+        .gte('date', from)
+        .lte('date', to)
+        .range(a, b),
+    ),
   ]);
   const counts: Record<string, number> = {};
   for (const visit of clusterVisits(appointments))
@@ -143,6 +153,7 @@ export async function calendarMonths(businessId: string, userId: string, query: 
     counts,
     constraintDates: [...new Set(constraints.map((c: any) => c.date))],
     reminderDates: [...new Set(notes.map((r: any) => r.event_date))],
+    overrideDates: [...new Set(overrides.map((o: any) => o.date))],
   };
 }
 

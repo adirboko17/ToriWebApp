@@ -192,18 +192,19 @@ export function AddSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onPick: (kind: 'appointment' | 'reminder' | 'constraint') => void;
+  onPick: (kind: 'appointment' | 'reminder' | 'override' | 'constraint') => void;
 }) {
   const options = [
     ['appointment', Calendar, 'תור', 'קביעת תור ללקוח לפי שירות ושעה', 'is-primary'],
     ['reminder', StickyNote, 'תזכורת ביומן', 'תזכורת לעצמך - לא חוסמת משבצות', 'is-note'],
+    ['override', Clock, 'חריגה', 'שינוי חלון זמן של תאריך מסוים', 'is-hours'],
     ['constraint', Ban, 'אילוצים', 'חסימת זמן בלוח - לקוחות לא יוכלו לקבוע תור', 'is-block'],
   ] as const;
   return (
     <BottomSheet open={open} onClose={onClose} size="auto" className="cal-sheet">
       <div className="sheet-scroll add-sheet">
         <h2>מה תרצה להוסיף?</h2>
-        <p>בחרו תור ללקוח, תזכורת פנימית, או אילוץ שחוסם משבצות</p>
+        <p>בחרו תור, תזכורת, חריגת שעות או אילוץ</p>
         {options.map(([kind, Icon, title, hint, tone]) => (
           <button type="button" key={kind} className="add-option" onClick={() => onPick(kind)}>
             <span className={`add-icon ${tone}`}>

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Ban, Bell, Calendar, CalendarDays, Check, ChevronRight, Grid3x3, List, Plus, Search, StickyNote } from 'lucide-react';
 import { api } from '@/lib/client';
 import { addDays, israelNow } from '@/lib/availability';
@@ -22,6 +22,7 @@ import {
   weekStartOf,
   ymd,
 } from '@/lib/calendar-format';
+import { HoursOverridesSheet } from './admin-hours';
 import {
   AddSheet,
   AgendaRow,
@@ -127,6 +128,60 @@ function useSwipe(onPrev: () => void, onNext: () => void) {
   };
 }
 
+function HoldButton({
+  className,
+  label,
+  onTap,
+  onHold,
+  children,
+}: {
+  className?: string;
+  label?: string;
+  onTap: () => void;
+  onHold: () => void;
+  children: ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const held = useRef(false);
+  const clear = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={label}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        held.current = false;
+        clear();
+        timer.current = window.setTimeout(() => {
+          held.current = true;
+          onHold();
+        }, 420);
+      }}
+      onPointerUp={clear}
+      onPointerLeave={clear}
+      onPointerCancel={clear}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        held.current = true;
+        onHold();
+      }}
+      onClick={() => {
+        if (held.current) {
+          held.current = false;
+          return;
+        }
+        onTap();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 type Confirm =
   | { kind: 'appointment'; row: any }
   | { kind: 'constraint'; item: any }
@@ -158,6 +213,7 @@ export default function AdminCalendar({
   const [visibleMonth, setVisibleMonth] = useState(monthStart(today));
   const [topHeight, setTopHeight] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [hoursSheet, setHoursSheet] = useState<{ date: string | null } | null>(null);
   const [searching, setSearching] = useState(false);
   const [visit, setVisit] = useState<Visit | null>(null);
   const [clientTarget, setClientTarget] = useState<ClientTarget | null>(null);
@@ -231,6 +287,10 @@ export default function AdminCalendar({
   );
   const remindersByDate = useMemo(
     () => groupBy<any>(ready ? data.reminders : [], (r) => r.event_date),
+    [data, ready],
+  );
+  const overrideDates = useMemo(
+    () => new Set<string>((ready ? data.overrides : []).map((o: any) => o.date)),
     [data, ready],
   );
 
@@ -363,6 +423,7 @@ export default function AdminCalendar({
 
   const openSummary = (kind: 'constraint' | 'reminder', item: any) => setSummary({ kind, item });
   const addDate = date < today ? today : date;
+  const openDayHours = (day: string) => setHoursSheet({ date: day });
 
   return (
     <div className={`cal cal-mode-${mode}`}>
@@ -398,19 +459,25 @@ export default function AdminCalendar({
             {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((d) => {
               const selected = d === date;
               const blocked = fullyBlocked(d);
+              const parts = [HE_LETTERS[dow(d)], String(ymd(d).d)];
+              if (blocked) parts.push('יום חסום לחלוטין באילוץ');
+              if (overrideDates.has(d)) parts.push('יש חריגת שעות');
+              parts.push('החזיקו כדי להוסיף חריגה');
               return (
-                <button
-                  type="button"
+                <HoldButton
                   key={d}
                   className={`${selected ? 'is-selected' : ''}${d === today ? ' is-today' : ''}${blocked ? ' is-blocked' : ''}`}
-                  aria-pressed={selected}
-                  aria-label={blocked ? `${HE_LETTERS[dow(d)]} ${ymd(d).d}, יום חסום לחלוטין באילוץ` : undefined}
-                  onClick={() => setDate(d)}
+                  label={parts.join(', ')}
+                  onTap={() => setDate(d)}
+                  onHold={() => openDayHours(d)}
                 >
                   <span>{HE_LETTERS[dow(d)]}</span>
-                  <b>{ymd(d).d}</b>
+                  <b>
+                    {ymd(d).d}
+                    {overrideDates.has(d) && <span className="cal-override" />}
+                  </b>
                   <i className={visitsByDate.has(d) ? 'is-marked' : ''} />
-                </button>
+                </HoldButton>
               );
             })}
           </div>
@@ -419,17 +486,21 @@ export default function AdminCalendar({
           <div className="week-head">
             <span className="week-gutter" />
             {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((d) => (
-              <button
-                type="button"
+              <HoldButton
                 key={d}
                 className={`${d === date ? 'is-selected' : ''}${d === today ? ' is-today' : ''}`}
-                onClick={() => setDate(d)}
+                label={`${HE_LETTERS[dow(d)]} ${ymd(d).d}${overrideDates.has(d) ? ', יש חריגת שעות' : ''}, החזיקו כדי להוסיף חריגה`}
+                onTap={() => setDate(d)}
+                onHold={() => openDayHours(d)}
               >
                 <em>{HE_LETTERS[dow(d)]}</em>
-                <b>{ymd(d).d}</b>
+                <b>
+                  {ymd(d).d}
+                  {overrideDates.has(d) && <span className="cal-override" />}
+                </b>
                 {visitsByDate.has(d) && <i />}
                 <small>{HE_SHORT_WEEKDAYS[dow(d)]}</small>
-              </button>
+              </HoldButton>
             ))}
           </div>
         )}
@@ -483,10 +554,12 @@ export default function AdminCalendar({
             selected={date}
             counts={months.counts}
             constraintDates={new Set(months.constraintDates)}
+            overrideDates={new Set(months.overrideDates || [])}
             onDay={(d) => {
               setDate(d);
               setMonthDay(d);
             }}
+            onHoldDay={openDayHours}
           />
         ))}
       {mode === 'list' &&
@@ -528,8 +601,17 @@ export default function AdminCalendar({
           if (kind === 'appointment') onBook(addDate);
           else if (kind === 'reminder')
             setReminderDraft({ event_date: addDate, start_time: '09:00', duration_minutes: 30, color_key: 'blue' });
+          else if (kind === 'override') setHoursSheet({ date: null });
           else setConstraintDraft({ date: addDate, start_time: '12:00', end_time: '13:00' });
         }}
+      />
+      <HoursOverridesSheet
+        slug={slug}
+        userId={userId}
+        open={!!hoursSheet}
+        date={hoursSheet?.date ?? null}
+        onClose={() => setHoursSheet(null)}
+        onChanged={reload}
       />
       <SearchSheet
         open={searching}
@@ -909,13 +991,17 @@ function MonthList({
   selected,
   counts,
   constraintDates,
+  overrideDates,
   onDay,
+  onHoldDay,
 }: {
   today: string;
   selected: string;
   counts: Record<string, number>;
   constraintDates: Set<string>;
+  overrideDates: Set<string>;
   onDay: (d: string) => void;
+  onHoldDay: (d: string) => void;
 }) {
   const months = Array.from({ length: MONTHS_AROUND * 2 + 1 }, (_, i) => addMonths(today, i - MONTHS_AROUND));
   return (
@@ -945,20 +1031,23 @@ function MonthList({
                     if (!d) return <span key={`e${j}`} className="month-cell is-empty" />;
                     const count = counts[d] || 0;
                     return (
-                      <button
-                        type="button"
+                      <HoldButton
                         key={d}
                         className={`month-cell${d === today ? ' is-today' : d === selected ? ' is-selected' : ''}${d < today ? ' is-past' : ''}`}
-                        onClick={() => onDay(d)}
-                        aria-label={`${ymd(d).d}${count ? `, ${count === 1 ? 'תור אחד' : `${count} תורים`}` : ''}${constraintDates.has(d) ? ', אילוץ' : ''}`}
+                        label={`${ymd(d).d}${count ? `, ${count === 1 ? 'תור אחד' : `${count} תורים`}` : ''}${constraintDates.has(d) ? ', אילוץ' : ''}${overrideDates.has(d) ? ', יש חריגת שעות' : ''}, החזיקו כדי להוסיף חריגה`}
+                        onTap={() => onDay(d)}
+                        onHold={() => onHoldDay(d)}
                       >
-                        <b>{ymd(d).d}</b>
+                        <b>
+                          {ymd(d).d}
+                          {overrideDates.has(d) && <span className="cal-override" />}
+                        </b>
                         <small>{hebrewDay(d)}</small>
                         <span className="month-pills">
                           {count > 0 && <em className="month-count">{count === 1 ? 'תור אחד' : `${count} תורים`}</em>}
                           {constraintDates.has(d) && <em className="month-block-pill">אילוץ</em>}
                         </span>
-                      </button>
+                      </HoldButton>
                     );
                   })}
                 </div>
@@ -967,7 +1056,7 @@ function MonthList({
           </section>
         );
       })}
-      <p className="month-hint">הקישו על יום כדי לראות תורים, אילוצים ותזכורות</p>
+      <p className="month-hint">הקישו על יום כדי לראות את היום. החזיקו על יום כדי להוסיף חריגה.</p>
     </div>
   );
 }

@@ -388,21 +388,51 @@ function FixedBreaks({ slug, value, onChanged }: { slug: string; value: number; 
 
 const overrideDate = (date: string) => `${HE_WEEKDAYS[dow(date)]}, ${ymd(date).d} ב${HE_MONTHS_SHORT[ymd(date).m]}`;
 
+function composerFor(date: string, row: any, weekly: any[] | undefined, locked: boolean) {
+  const weeklyRow = weekly?.find((h) => h.day_of_week === dow(date));
+  const source = row || {
+    is_active: weeklyRow ? weeklyRow.is_active !== false : true,
+    start_time: weeklyRow?.start_time,
+    end_time: weeklyRow?.end_time,
+  };
+  const breaks = breaksOf(row).map((b) => makeBreak(b.start_time, b.end_time));
+  return {
+    scope: 'day',
+    from: date,
+    to: date,
+    active: source.is_active !== false,
+    start: hm(source.start_time) || '09:00',
+    end: hm(source.end_time) || '17:00',
+    useBreaks: breaks.length > 0,
+    breaks,
+    editing: !!row,
+    locked,
+  };
+}
+
 function Overrides({
   slug,
   userId,
   overrides,
   bookedDates,
+  weekly,
+  presetDate,
   onChanged,
+  onPresetClose,
 }: {
   slug: string;
   userId: string;
   overrides: any[];
   bookedDates: string[];
+  weekly?: any[];
+  presetDate?: string | null;
   onChanged: () => void;
+  onPresetClose?: () => void;
 }) {
   const today = israelNow().date;
-  const [composer, setComposer] = useState<any>(null);
+  const [composer, setComposer] = useState<any>(() =>
+    presetDate ? composerFor(presetDate, overrides.find((o) => o.date === presetDate), weekly, true) : null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState<any>(null);
@@ -410,19 +440,12 @@ function Overrides({
   const set = (patch: any) => setComposer((c: any) => ({ ...c, ...patch }));
 
   function openComposer(row?: any) {
-    const breaks = breaksOf(row).map((b) => makeBreak(b.start_time, b.end_time));
-    setComposer({
-      scope: 'day',
-      from: row?.date || today,
-      to: row?.date || addDays(today, 6),
-      active: row ? row.is_active !== false : true,
-      start: hm(row?.start_time) || '09:00',
-      end: hm(row?.end_time) || '17:00',
-      useBreaks: breaks.length > 0,
-      breaks,
-      editing: !!row,
-    });
+    setComposer(composerFor(row?.date || today, row, weekly, false));
     setError('');
+  }
+  function closeComposer() {
+    setComposer(null);
+    if (presetDate) onPresetClose?.();
   }
 
   async function save() {
@@ -454,6 +477,7 @@ function Overrides({
         });
       setComposer(null);
       onChanged();
+      if (presetDate) onPresetClose?.();
     } catch (e: any) {
       setError(e.message || 'לא ניתן לשמור את החריגה. נסו שוב.');
     } finally {
@@ -483,6 +507,7 @@ function Overrides({
           {error}
         </p>
       )}
+      {!presetDate && (
       <div className="hours-card">
         <div className="hours-summary-head">
           <strong>שעות לתאריך</strong>
@@ -522,11 +547,14 @@ function Overrides({
           </button>
         </div>
       </div>
-      <BottomSheet open={!!composer} onClose={() => setComposer(null)} title="הגדרת שעות לתאריכים" size="tall" className="hours-sheet">
+      )}
+      <BottomSheet open={!!composer} onClose={closeComposer} title={composer?.locked ? 'חריגה ליום' : 'הגדרת שעות לתאריכים'} size="tall" className="hours-sheet">
         {composer && (
           <div className="sheet-scroll hours-composer">
-            <p className="hours-composer-sub">בחרו יום או טווח תאריכים</p>
-            {!composer.editing && (
+            <p className="hours-composer-sub">
+              {composer.locked ? 'שעות העבודה ביום הזה, במקום השעות השבועיות' : 'בחרו יום או טווח תאריכים'}
+            </p>
+            {!composer.editing && !composer.locked && (
               <div className="hours-scope" role="tablist">
                 {[
                   ['day', 'יום'],
@@ -541,7 +569,7 @@ function Overrides({
             <div className="hours-card hours-composer-card">
               <label className="hours-composer-row">
                 <span>{composer.scope === 'range' ? 'מתאריך' : 'תאריך'}</span>
-                <input type="date" min={today} value={composer.from} disabled={composer.editing} onChange={(e) => set({ from: e.target.value })} />
+                <input type="date" min={today} value={composer.from} disabled={composer.editing || composer.locked} onChange={(e) => set({ from: e.target.value })} />
               </label>
               {composer.scope === 'range' && (
                 <label className="hours-composer-row">
@@ -572,7 +600,7 @@ function Overrides({
               </p>
             )}
             <div className="hours-actions">
-              <button type="button" className="hours-cancel" onClick={() => setComposer(null)}>
+              <button type="button" className="hours-cancel" onClick={closeComposer}>
                 ביטול
               </button>
               <button type="button" className="hours-save" disabled={busy} onClick={save}>
@@ -596,8 +624,100 @@ function Overrides({
   );
 }
 
+export function HoursOverridesSheet({
+  slug,
+  userId,
+  open,
+  date,
+  onClose,
+  onChanged,
+}: {
+  slug: string;
+  userId: string;
+  open: boolean;
+  date: string | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!open) {
+      setData(null);
+      return;
+    }
+    let live = true;
+    setError('');
+    api(slug, 'admin-hours-data')
+      .then((r) => live && setData(r))
+      .catch((e) => live && setError(e.message));
+    return () => {
+      live = false;
+    };
+  }, [open, slug, userId, tick]);
+  const changed = () => {
+    setTick((n) => n + 1);
+    onChanged();
+  };
+  if (date)
+    return data ? (
+      <Overrides
+        slug={slug}
+        userId={userId}
+        overrides={data.overrides}
+        bookedDates={data.bookedDates}
+        weekly={data.weekly}
+        presetDate={date}
+        onChanged={changed}
+        onPresetClose={onClose}
+      />
+    ) : (
+      <BottomSheet open={open} onClose={onClose} title="חריגה ליום" size="auto" className="hours-sheet">
+        <div className="sheet-scroll">
+          {error ? (
+            <p className="hours-error" role="alert">
+              {error}
+            </p>
+          ) : (
+            <div className="hours-loading" role="status">
+              <div className="loading-ring" />
+              <span>טוען את היום…</span>
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+    );
+  return (
+    <BottomSheet open={open} onClose={onClose} title="חריגות" size="tall" className="hours-sheet">
+      <div className="sheet-scroll">
+        <p className="hours-composer-sub">מחליפות את השעות השבועיות רק בימים האלה</p>
+        {error ? (
+          <p className="hours-error" role="alert">
+            {error}
+          </p>
+        ) : !data ? (
+          <div className="hours-loading" role="status">
+            <div className="loading-ring" />
+            <span>טוען חריגות…</span>
+          </div>
+        ) : (
+          <Overrides
+            slug={slug}
+            userId={userId}
+            overrides={data.overrides}
+            bookedDates={data.bookedDates}
+            weekly={data.weekly}
+            onChanged={changed}
+          />
+        )}
+      </div>
+    </BottomSheet>
+  );
+}
+
 export default function AdminHours({ slug, userId }: { slug: string; userId: string }) {
-  const [tab, setTab] = useState<'hours' | 'breaks' | 'overrides'>('hours');
+  const [tab, setTab] = useState<'hours' | 'breaks'>('hours');
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
   const load = () =>
@@ -617,7 +737,6 @@ export default function AdminHours({ slug, userId }: { slug: string; userId: str
           [
             ['hours', 'שעות עבודה'],
             ['breaks', 'הפסקות קבועות'],
-            ['overrides', 'חריגות'],
           ] as const
         ).map(([id, label]) => (
           <button type="button" role="tab" aria-selected={tab === id} key={id} className={tab === id ? 'is-on' : ''} onClick={() => setTab(id)}>
@@ -637,10 +756,8 @@ export default function AdminHours({ slug, userId }: { slug: string; userId: str
           </div>
         ) : tab === 'hours' ? (
           <WeeklyHours slug={slug} userId={userId} weekly={data.weekly} onChanged={load} />
-        ) : tab === 'breaks' ? (
-          <FixedBreaks slug={slug} value={data.breakMinutes} onChanged={(breakMinutes) => setData((d: any) => ({ ...d, breakMinutes }))} />
         ) : (
-          <Overrides slug={slug} userId={userId} overrides={data.overrides} bookedDates={data.bookedDates} onChanged={load} />
+          <FixedBreaks slug={slug} value={data.breakMinutes} onChanged={(breakMinutes) => setData((d: any) => ({ ...d, breakMinutes }))} />
         )}
       </div>
     </div>
