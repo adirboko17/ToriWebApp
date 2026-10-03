@@ -469,6 +469,14 @@ header {
   max-height: 60px;
   object-fit: contain;
 }
+@media (min-width: 801px) {
+  .wordmark img.is-light-logo {
+    filter:
+      drop-shadow(0 0 1px rgb(0 0 0 / 85%))
+      drop-shadow(0 1px 2px rgb(0 0 0 / 55%))
+      drop-shadow(0 4px 10px rgb(0 0 0 / 28%));
+  }
+}
 .wordmark .business-title {
   font: 500 22px Arial;
   letter-spacing: 0;
@@ -15224,9 +15232,10 @@ body .sd-grid button.is-selected {
   color: var(--primary);
 }
 .ch-map-balloon img {
-  width: 38px;
-  height: 38px;
-  object-fit: contain;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 .ch-map-tip {
   width: 18px;

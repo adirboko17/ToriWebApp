@@ -32,11 +32,12 @@ export function scoped(table: string, businessId: string) {
   return db().from(table).select('*').eq('business_id', businessId);
 }
 export async function tenant(slug: string) {
-  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(slug)) return null;
+  const key = slug.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(key)) return null;
   const { data, error } = await db()
     .from('business_profile')
     .select('*')
-    .eq('web_slug', slug)
+    .ilike('web_slug', key)
     .maybeSingle();
   if (!error && data) return data;
   if (error && error.code !== '42703' && error.code !== 'PGRST204')
@@ -45,7 +46,7 @@ export async function tenant(slug: string) {
   const branded = await db()
     .from('business_profile')
     .select('*')
-    .eq('branding_client_name', slug)
+    .ilike('branding_client_name', key)
     .maybeSingle();
   if (!branded.error && branded.data) return branded.data;
   if (branded.error && branded.error.code !== '42703' && branded.error.code !== 'PGRST204')
@@ -57,12 +58,12 @@ export async function tenant(slug: string) {
     linbitton: '7cf95c3f-90a5-4986-9b79-bd0340961b06',
     shirlavy: '542f799f-f360-4a90-b710-1728aabea703',
   };
-  if (!known[slug]) return null;
+  if (!known[key]) return null;
   return result(
     db()
       .from('business_profile')
       .select('*')
-      .eq('id', known[slug])
+      .eq('id', known[key])
       .maybeSingle(),
   );
 }

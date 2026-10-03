@@ -585,8 +585,8 @@ export default function HomeSurface({
             <span className="ch-map-wash" />
             <span className="ch-map-pin" aria-hidden>
               <span className="ch-map-balloon">
-                {logos.length ? (
-                  <BrandImage sources={logos} alt="" fallback={<MapPin size={24} />} />
+                {(p.icon_url || logos.length) ? (
+                  <BrandImage sources={[p.icon_url, ...logos]} alt="" fallback={<MapPin size={24} />} />
                 ) : (
                   <MapPin size={24} />
                 )}

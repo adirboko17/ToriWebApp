@@ -327,7 +327,7 @@ export default function BookingApp({ slug }: { slug: string; screen?: string }) 
         <header>
           <a className="wordmark" href={`/${slug}`}>
             {p?.home_header_show_logo !== false && businessLogos(p, slug).length ? (
-              <BrandImage sources={businessLogos(p, slug)} alt={p?.display_name || 'לוגו העסק'} fallback={<span>{p?.display_name || 'Tori'}</span>} />
+              <BrandImage sources={businessLogos(p, slug)} alt={p?.display_name || 'לוגו העסק'} fallback={<span>{p?.display_name || 'Tori'}</span>} shadeIfLight />
             ) : p?.home_header_show_logo === false ? (
               <span className="business-title">
                 {p.home_header_text_without_logo || p.display_name}
